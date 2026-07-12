@@ -308,7 +308,11 @@ export async function extractFonts(pkg: PptxPackage, slideNumber?: number): Prom
     const slideXml = await pkg.text(`ppt/slides/slide${slideNumber}.xml`);
     for (const match of slideXml.matchAll(/typeface="([^"]+)"/g)) fonts.add(match[1]);
   }
-  return [...fonts].filter((font) => font && !["Arial", "Calibri"].includes(font)).sort();
+  // Drop empties, ubiquitous system fonts, and theme-font references like
+  // "+mn-lt" / "+mj-ea" (these resolve to the theme, not a real typeface).
+  return [...fonts]
+    .filter((font) => font && !font.startsWith("+") && !["Arial", "Calibri"].includes(font))
+    .sort();
 }
 
 /**
@@ -494,7 +498,10 @@ function pictureToField(picXml: string): TemplateField | undefined {
 
 function shapeToField(shapeXml: string): TemplateField | undefined {
   if (!shapeXml.includes("<p:txBody>")) return undefined;
-  const props = shapeXml.match(/<p:cNvPr\b([^>]*)\/>/)?.[1] ?? "";
+  // `<p:cNvPr>` can be self-closing (`<p:cNvPr .../>`, common in Google Slides
+  // exports) or a paired tag with children (`<p:cNvPr ...>...</p:cNvPr>`, emitted
+  // by PptxGenJS and some PowerPoint versions). Match either form.
+  const props = shapeXml.match(/<p:cNvPr\b([^>]*?)\s*\/?>/)?.[1] ?? "";
   const shapeId = props.match(/\bid="([^"]+)"/)?.[1];
   const name = props.match(/\bname="([^"]+)"/)?.[1] ?? "";
   if (!shapeId) return undefined;
