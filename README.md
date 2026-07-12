@@ -113,91 +113,6 @@ The same prompt-driven flow backs the other skills:
 - *"Document what the two-column template is for."* →
   `draft-slide-template-description`
 
-### Prefer to drive it yourself?
-
-Everything the agent does, you can do by hand. A deck is a `build.ts` script in a
-`projects/<name>/` folder that the CLI runs. Create the folder
-(`mkdir -p projects/hello`), write one of the two shapes below, then run
-`npm run cli -- build --script projects/hello/build.ts`.
-
-**Clone and fill a template** (the repo ships `title-cover` and
-`content-lead-bullets`):
-
-```ts
-// projects/hello/build.ts
-import { Presentation, md } from "../../src/index.js";
-
-const deck = new Presentation({
-  title: "Hello deck",
-  templateLibrary: "templates",
-  projectDir: "projects/hello",
-});
-
-deck.addSlideFromTemplate({
-  templateName: "title-cover",
-  variables: {
-    "overline-label": "Getting started",
-    "your-presentation-title-goes-here": "My first deck",
-    "a-short-subtitle-that-sets-up-the-st": "Built from a real template.",
-  },
-});
-
-deck.addSlideFromTemplate({
-  templateName: "content-lead-bullets",
-  variables: {
-    "section-header": "Why it works_",
-    "a-lead-statement-that-frames-the-thr": md("Three reasons."),
-    "first-supporting-point-that-backs-up": "Keeps the original layout\nFills only the text\nOpens everywhere",
-  },
-});
-
-await deck.render({ output: "output/deck.pptx", report: "output/report.md", screenshots: "output/screenshots" });
-```
-
-**Design slides from scratch**, guided by the design system:
-
-```ts
-// projects/hello/build.ts
-import { Presentation, CustomSlide, C, FONTS, LAYOUT } from "../../src/index.js";
-
-const { LM, CW } = LAYOUT;
-const deck = new Presentation({ title: "Hello deck", projectDir: "projects/hello" });
-
-deck.addCustomSlide(new CustomSlide({
-  name: "cover",
-  background: "dark",
-  draw({ slide }) {
-    slide.addText("Designed from scratch", {
-      x: LM, y: 2, w: CW, h: 1, fontSize: 32, color: C.white, fontFace: FONTS.sans, margin: 0,
-    });
-  },
-}));
-
-deck.addCustomSlide(new CustomSlide({
-  name: "pillars",
-  background: "light",
-  draw({ slide, helpers }) {
-    helpers.addHeader(slide, "Three pillars_");
-    ["Discover", "Build", "Measure"].forEach((heading, i) =>
-      helpers.addCard(slide, {
-        x: LM + i * 2.95, y: 1.6, w: 2.7, h: 2.6,
-        heading, body: "A short supporting line.", accent: C.accent,
-      }),
-    );
-    helpers.addFooter(slide, 2);
-  },
-}));
-
-await deck.render({ output: "output/deck.pptx", report: "output/report.md" });
-```
-
-The build produces `projects/hello/output/deck.pptx`, a `report.md`, and (if
-LibreOffice is installed) `output/screenshots/*.png`. See
-[`custom-template-instructions.md`](custom-template-instructions.md) for the full
-scratch-building guide and ten worked layouts.
-
----
-
 ## Concepts
 
 ### Templates
@@ -382,8 +297,17 @@ tool end to end from a plain-language request.
 
 ### Wire them into your agent
 
-Claude Code discovers skills under `.claude/skills/`. Symlink this repo's skills
-in once:
+The quickest way is [skills.sh](https://skills.sh). From your project root, run:
+
+```bash
+npx skills add alfonsograziano/pptx-gen
+```
+
+That installs these skills into your agent's skills directory (e.g.
+`.claude/skills/` for Claude Code) so they are discovered automatically.
+
+Prefer to link them yourself? Claude Code discovers skills under
+`.claude/skills/`, so you can symlink this repo's skills in once:
 
 ```bash
 mkdir -p ~/.claude/skills
