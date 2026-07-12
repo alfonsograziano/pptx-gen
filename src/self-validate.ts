@@ -1,89 +1,71 @@
-import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
+/**
+ * End-to-end self-check: ingest a slide from the bundled example source deck,
+ * build a deck from it with a replaced field and an addText override, and verify
+ * the output is a valid single-slide package containing the new text. Runs fully
+ * in a temp directory and needs no external binaries.
+ *
+ *   npm run self-validate
+ */
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ingestTemplate, Presentation, md } from "./index.js";
+import { ingestTemplate, Presentation } from "./index.js";
 import { readYamlFile } from "./fs.js";
 import type { FieldsFile } from "./types.js";
 import { PptxPackage } from "./pptx-package.js";
 import { getSlideEntries } from "./ooxml.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const repoRoot = path.resolve(projectRoot, "..", "..");
-const fixture = path.join(repoRoot, "lake", "Untitled presentation.pptx");
-const workDir = path.join(projectRoot, "tmp", "self-validation");
+const source = path.join(projectRoot, "examples", "example-source.pptx");
+const templateName = "self-validation-title";
+
+const workDir = await mkdtemp(path.join(os.tmpdir(), "pptx-gen-self-validate-"));
 const templateRoot = path.join(workDir, "templates");
-const deckProject = path.join(workDir, "projects", "lake-import");
-const templateName = "lake-four-step-funnel";
+const deckProject = path.join(workDir, "deck");
 
-await rm(workDir, { recursive: true, force: true });
-await mkdir(deckProject, { recursive: true });
+try {
+  // 1. Ingest one slide from the example source into a fresh template library.
+  await ingestTemplate({ source, templateName, slide: 1, templateRoot });
 
-await ingestTemplate({
-  source: fixture,
-  templateName,
-  slide: 1,
-  templateRoot
-});
+  const fields = await readYamlFile<FieldsFile>(path.join(templateRoot, templateName, "fields.yml"));
+  const titleField = fields.fields.find((field) => field.originalText.includes("presentation title"));
+  if (!titleField) throw new Error("Self-validation fixture did not expose the expected title field.");
 
-const fields = await readYamlFile<FieldsFile>(path.join(templateRoot, templateName, "fields.yml"));
-const titleField = fields.fields.find((field) => field.originalText.includes("Progressive discovery"));
-const introField = fields.fields.find((field) => field.originalText.includes("narrows the search space"));
-if (!titleField || !introField) throw new Error("Self-validation fixture did not expose expected text fields.");
+  // 2. Build a deck: replace the title and add a stamped text box.
+  const deck = new Presentation({ templateLibrary: templateRoot, projectDir: deckProject });
+  deck.addSlideFromTemplate({
+    templateName,
+    variables: { [titleField.id]: "Validated generation" },
+    overrides: [
+      {
+        op: "addText",
+        id: "validation-stamp",
+        text: "Self-validation passed",
+        x: 6.8,
+        y: 0.35,
+        w: 2.2,
+        h: 0.25,
+        style: { fontSize: 8, color: "5B6472", italic: true }
+      }
+    ]
+  });
 
-const deck = new Presentation({
-  templateLibrary: templateRoot,
-  projectDir: deckProject
-});
+  const report = await deck.render({ output: "deck.pptx", report: "report.md", progress: false });
 
-deck.addSlideFromTemplate({
-  templateName,
-  variables: {
-    [titleField.id]: "Validated generation_",
-    [introField.id]: md("This slide was **ingested**, cloned, filled, and rebuilt by the TypeScript generator.")
-  },
-  overrides: [
-    {
-      op: "addText",
-      id: "validation-stamp",
-      text: "Self-validation passed",
-      x: 6.8,
-      y: 0.35,
-      w: 2.2,
-      h: 0.25,
-      style: { fontFace: "Inter", fontSize: 8, color: "526288", italic: true }
-    }
-  ]
-});
+  // 3. Verify the output.
+  const outputPath = path.join(deckProject, "deck.pptx");
+  const pkg = await PptxPackage.load(outputPath);
+  const entries = await getSlideEntries(pkg);
+  if (entries.length !== 1) throw new Error(`Expected 1 output slide, got ${entries.length}.`);
 
-const report = await deck.render({
-  output: "output/lake-import-generated.pptx",
-  report: "output/report.md",
-  screenshots: "output/screenshots"
-});
+  const slideXml = await pkg.text(`ppt/slides/slide${entries[0].slideNumber}.xml`);
+  if (!slideXml.includes("Validated generation")) throw new Error("Output is missing the replaced title text.");
+  if (!slideXml.includes("Self-validation passed")) throw new Error("Output is missing the addText override.");
 
-const outputPath = path.join(deckProject, "output", "lake-import-generated.pptx");
-const pkg = await PptxPackage.load(outputPath);
-const slideEntries = await getSlideEntries(pkg);
-if (slideEntries.length !== 1) throw new Error(`Expected 1 output slide, got ${slideEntries.length}.`);
-const outputText = await pkg.text(`ppt/slides/slide${slideEntries[0].slideNumber}.xml`);
-if (!outputText.includes("Validated generation")) throw new Error("Generated PPTX does not include replaced title text.");
-if (!outputText.includes("Self-validation passed")) throw new Error("Generated PPTX does not include addText override.");
-const templateScreenshots = await listPngs(path.join(templateRoot, templateName, "screenshots"));
-if (templateScreenshots.length < 1) throw new Error("Ingestion did not generate template PNG screenshots.");
-const projectScreenshots = await listPngs(path.join(deckProject, "output", "screenshots"));
-if (projectScreenshots.length < 1) throw new Error("Render did not generate project PNG screenshots.");
-
-await writeFile(path.join(workDir, "SELF_VALIDATION_PASSED.txt"), [
-  "Self-validation passed.",
-  `Output: ${outputPath}`,
-  `Template screenshots: ${templateScreenshots.length}`,
-  `Project screenshots: ${projectScreenshots.length}`,
-  `Warnings: ${report.warnings.length}`
-].join("\n"), "utf8");
-
-console.log(`Self-validation passed: ${outputPath}`);
-
-async function listPngs(dir: string): Promise<string[]> {
-  const files = await readdir(dir).catch(() => []);
-  return files.filter((file) => file.endsWith(".png")).sort();
+  console.log("Self-validation passed.");
+  console.log(`  Output: ${outputPath}`);
+  console.log(`  Warnings: ${report.warnings.length ? report.warnings.map((w) => w.code).join(", ") : "none"}`);
+} finally {
+  await rm(workDir, { recursive: true, force: true });
 }
