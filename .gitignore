@@ -1,0 +1,8 @@
+node_modules/
+tmp/
+templates-preview/
+
+# Generated deck artifacts: rendered screenshots (PNGs) and PDF previews.
+# The .pptx in output/ is kept; only the heavy render artifacts are ignored.
+projects/*/output/screenshots/
+projects/*/output/**/*.pdf
