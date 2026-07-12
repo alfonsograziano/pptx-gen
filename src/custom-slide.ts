@@ -5,7 +5,6 @@ import pptxgenjs from "pptxgenjs";
 import { C, FONTS, LAYOUT } from "./design.js";
 import { createCustomSlideHelpers, type CustomSlideHelpers } from "./custom-slide-helpers.js";
 import { ensureDir } from "./fs.js";
-import { rasterizeSvgToPng } from "./rasterize.js";
 
 type Pptx = {
   defineLayout: (layout: { name: string; width: number; height: number }) => void;
@@ -37,7 +36,7 @@ export type CustomSlideContext = {
   pageNum: number;
   projectDir: string;
   assetsDir: string;
-  brand: {
+  design: {
     colors: typeof C;
     layout: typeof LAYOUT;
   };
@@ -84,7 +83,6 @@ export async function renderCustomSlideToPptx(options: {
     projectDir: options.projectDir,
     assetsDir: options.assetsDir,
     shapeType: pptx.ShapeType,
-    rasterizeSvg: rasterizeSvgToPng
   });
 
   await options.customSlide.draw({
@@ -93,7 +91,7 @@ export async function renderCustomSlideToPptx(options: {
     pageNum: options.pageNum,
     projectDir: options.projectDir,
     assetsDir: options.assetsDir,
-    brand: { colors: C, layout: LAYOUT },
+    design: { colors: C, layout: LAYOUT },
     helpers
   });
 
@@ -113,7 +111,6 @@ export async function renderCustomSlidesToPptx(options: {
     projectDir: options.projectDir,
     assetsDir: options.assetsDir,
     shapeType: pptx.ShapeType,
-    rasterizeSvg: rasterizeSvgToPng
   });
 
   for (const [index, customSlide] of options.customSlides.entries()) {
@@ -125,7 +122,7 @@ export async function renderCustomSlidesToPptx(options: {
       pageNum: index + 1,
       projectDir: options.projectDir,
       assetsDir: options.assetsDir,
-      brand: { colors: C, layout: LAYOUT },
+      design: { colors: C, layout: LAYOUT },
       helpers
     });
   }

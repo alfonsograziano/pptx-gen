@@ -42,7 +42,18 @@ const execFileAsync = promisify(execFile);
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATE_ROOT = path.resolve(HERE, "..", "templates");
-const USER_FONT_DIR = path.join(os.homedir(), "Library", "Fonts");
+
+// Where the OS looks for user-installed fonts.
+function userFontDir(): string {
+  if (process.platform === "darwin") return path.join(os.homedir(), "Library", "Fonts");
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA ?? path.join(os.homedir(), "AppData", "Local");
+    return path.join(localAppData, "Microsoft", "Windows", "Fonts");
+  }
+  return path.join(os.homedir(), ".local", "share", "fonts");
+}
+
+const USER_FONT_DIR = userFontDir();
 
 // Fonts that never need installing: they ship with every OS or are handled by
 // the renderer's own substitution.

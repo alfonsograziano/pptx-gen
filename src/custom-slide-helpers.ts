@@ -42,9 +42,8 @@ export function createCustomSlideHelpers(options: {
   projectDir: string;
   assetsDir: string;
   shapeType: ShapeType;
-  rasterizeSvg?: (svg: string) => Promise<Buffer | null>;
 }) {
-  const { projectDir, assetsDir, shapeType, rasterizeSvg } = options;
+  const { projectDir, assetsDir, shapeType } = options;
 
   return {
     addHeader(slide: Slide, text: string, opts: { light?: boolean } = {}) {
@@ -241,17 +240,14 @@ export function createCustomSlideHelpers(options: {
       });
     },
 
-    // Embeds a rasterized PNG of the SVG when a rasterizer is available. PptxGenJS
-    // embeds SVG images with a "broken image" raster fallback that Google Slides
-    // (and older PowerPoint) show instead of the vector, so we ship a real PNG and
-    // fall back to the raw SVG only when no rasterizer is available.
-    async addSvgDiagram(slide: Slide, opts: Box & { id: string; svg: string }) {
-      const png = rasterizeSvg ? await rasterizeSvg(opts.svg) : null;
-      const data = png
-        ? `image/png;base64,${png.toString("base64")}`
-        : `image/svg+xml;base64,${Buffer.from(opts.svg).toString("base64")}`;
+    // Embeds the SVG as an image. PptxGenJS embeds SVG with a raster fallback
+    // that Google Slides and older PowerPoint show as a broken-image placeholder,
+    // so the result is not reliably editable and may not render everywhere.
+    // Strongly prefer native shapes plus addVectorIcon/addIcon; reserve this for
+    // complex art (gradients, illustrations) that cannot be expressed as shapes.
+    addSvgDiagram(slide: Slide, opts: Box & { id: string; svg: string }) {
       slide.addImage({
-        data,
+        data: `image/svg+xml;base64,${Buffer.from(opts.svg).toString("base64")}`,
         x: opts.x,
         y: opts.y,
         w: opts.w,
