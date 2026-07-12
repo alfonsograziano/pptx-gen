@@ -149,7 +149,7 @@ export class Presentation {
       });
     }
 
-    await progress.step(`Validating fonts ${dimKind([...requiredFonts].join(", ") || "none")}`, () => validateFonts(pkg, [...requiredFonts]));
+    await progress.step(`Validating fonts ${dimKind([...requiredFonts].join(", ") || "none")}`, () => validateFonts(pkg, [...requiredFonts], warnings));
     await progress.step("Assembling and saving deck", async () => {
       await keepOnlySlides(pkg, clonedSlides);
       await ensureDir(path.dirname(output));

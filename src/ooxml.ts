@@ -311,7 +311,19 @@ export async function extractFonts(pkg: PptxPackage, slideNumber?: number): Prom
   return [...fonts].filter((font) => font && !["Arial", "Calibri"].includes(font)).sort();
 }
 
-export async function validateFonts(pkg: PptxPackage, expectedFonts: string[]): Promise<void> {
+/**
+ * Check that every font a deck uses is either embedded in the package or a
+ * common system font, and warn about any that are not.
+ *
+ * This is a warning, not a hard failure. A font that is embedded in the template
+ * travels inside the .pptx and renders everywhere; a font that is only missing
+ * locally still renders for viewers who have it, and otherwise the app
+ * substitutes a fallback. Failing the build here would mean a deck cannot be
+ * produced just because a design font is not installed on this machine, which is
+ * exactly the friction an open tool should avoid. Install missing fonts with
+ * `npm run install-fonts` if you want crisp local screenshots.
+ */
+export async function validateFonts(pkg: PptxPackage, expectedFonts: string[], warnings: BuildWarning[] = []): Promise<void> {
   const embeddedFonts = await getEmbeddedFonts(pkg);
   const embeddedFamilies = new Set([...embeddedFonts].map(baseFontFamily));
   const isAvailable = (font: string): boolean =>
@@ -320,7 +332,10 @@ export async function validateFonts(pkg: PptxPackage, expectedFonts: string[]): 
     isLikelySystemFont(font);
   const missing = expectedFonts.filter((font) => !isAvailable(font));
   if (missing.length > 0) {
-    throw new Error(`Missing required font(s): ${missing.join(", ")}. Run \`npm run ensure-fonts\` to install them, or embed them in the template PPTX.`);
+    warnings.push({
+      code: "font-not-embedded",
+      message: `Font(s) not embedded in the deck and not known system fonts: ${missing.join(", ")}. The deck was still built; viewers without these fonts see a substitute. Run \`npm run install-fonts\` or embed them in the template PPTX for exact rendering.`
+    });
   }
 }
 
