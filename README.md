@@ -272,7 +272,6 @@ npm test                 # run the test suite
 npm run build            # typecheck (tsc --noEmit)
 npm run install-fonts    # install the design fonts locally (optional)
 npm run show-all-templates
-npm run copy-project -- <project>   # copy a built deck's text to the clipboard
 npm run self-validate    # end-to-end: ingest, build, and check a deck
 ```
 

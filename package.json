@@ -11,7 +11,6 @@
     "build": "tsc --noEmit",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "cli": "tsx src/cli.ts",
-    "copy-project": "tsx src/copy-project.ts",
     "ensure-fonts": "tsx src/install-fonts.ts",
     "install-fonts": "tsx src/install-fonts.ts",
     "show-all-templates": "tsx src/show-all-templates.ts",
