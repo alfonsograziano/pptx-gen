@@ -26,6 +26,12 @@ It ships with:
 - [skills](#skills) that let an AI agent (Claude Code, Codex, …) drive the whole
   workflow.
 
+**How you use it.** The primary interface is the [skills](#skills). You describe
+the deck to an AI coding agent (Claude Code, Codex, …), and it does everything for
+you: choosing templates or designing slides, writing the build script, running the
+CLI, reviewing the screenshots, and handing back the `.pptx`. You can also drive
+the CLI and the API directly — both are documented below — but you never have to.
+
 ---
 
 ## Two ways to build a deck
@@ -71,17 +77,51 @@ npm install
 
 ## Quick start
 
-Every deck is a small `build.ts` script inside a `projects/<name>/` folder, run by
-the CLI. Create one:
+You do not write code to build a deck. You talk to an AI coding agent that has
+these skills, and it does the work.
 
-```bash
-mkdir -p projects/hello/output
-```
+**1. Give your agent the skills.** Point its skills directory at
+[`skills/`](skills). For Claude Code, symlink them into `.claude/skills/` (see
+[Skills](#skills)).
 
-### Clone and fill a template
+**2. Ask for a deck.** In plain language, for example:
 
-The repo ships two example templates (`title-cover` and `content-lead-bullets`).
-Fill their fields by id:
+> Build a 4-slide deck introducing our new payments API to a technical audience.
+> Open with a title slide, then the problem, then how it works, then a call to
+> action. Keep it factual.
+
+**3. Watch the `pptx-deck` skill run.** It:
+
+- reads [`design.md`](design.md) for the visual language;
+- lists `templates/` and reads each `description.md` to pick slides, or designs
+  slides from scratch when nothing fits;
+- writes a build script at `projects/payments-api/build.ts` with your content;
+- builds it with the CLI:
+  `npm run cli -- build --script projects/payments-api/build.ts`;
+- inspects the rendered screenshots and the build report, fixes any issues, and
+- hands back `projects/payments-api/output/deck.pptx`.
+
+You get a real, editable `.pptx` plus a report and screenshots. To change it, just
+tell the agent what to adjust and it edits the script and re-runs the build.
+
+The same prompt-driven flow backs the other skills:
+
+- *"Import slides 3, 5 and 8 from deck.pptx as reusable templates."* →
+  `ingest-slide-templates`
+- *"Make the deck match our brand: navy #0B1F3A, a coral accent, Poppins font."* →
+  `customize-design`
+- *"Document what the two-column template is for."* →
+  `draft-slide-template-description`
+
+### Prefer to drive it yourself?
+
+Everything the agent does, you can do by hand. A deck is a `build.ts` script in a
+`projects/<name>/` folder that the CLI runs. Create the folder
+(`mkdir -p projects/hello`), write one of the two shapes below, then run
+`npm run cli -- build --script projects/hello/build.ts`.
+
+**Clone and fill a template** (the repo ships `title-cover` and
+`content-lead-bullets`):
 
 ```ts
 // projects/hello/build.ts
@@ -111,28 +151,18 @@ deck.addSlideFromTemplate({
   },
 });
 
-await deck.render({
-  output: "output/deck.pptx",
-  report: "output/report.md",
-  screenshots: "output/screenshots",
-});
+await deck.render({ output: "output/deck.pptx", report: "output/report.md", screenshots: "output/screenshots" });
 ```
 
-### Design a slide from scratch
-
-No template needed. Draw with native shapes, text, and the design helpers, which
-read the palette, fonts, and grid from [`design.md`](design.md) /
-[`src/design.ts`](src/design.ts):
+**Design slides from scratch**, guided by the design system:
 
 ```ts
 // projects/hello/build.ts
 import { Presentation, CustomSlide, C, FONTS, LAYOUT } from "../../src/index.js";
 
 const { LM, CW } = LAYOUT;
-
 const deck = new Presentation({ title: "Hello deck", projectDir: "projects/hello" });
 
-// A cover, drawn from scratch on a dark background.
 deck.addCustomSlide(new CustomSlide({
   name: "cover",
   background: "dark",
@@ -143,7 +173,6 @@ deck.addCustomSlide(new CustomSlide({
   },
 }));
 
-// Three cards, using the built-in helpers so they follow the design system.
 deck.addCustomSlide(new CustomSlide({
   name: "pillars",
   background: "light",
@@ -162,18 +191,10 @@ deck.addCustomSlide(new CustomSlide({
 await deck.render({ output: "output/deck.pptx", report: "output/report.md" });
 ```
 
-See [`custom-template-instructions.md`](custom-template-instructions.md) for the
-full guide and ten worked layouts (callouts, comparisons, timelines, diagrams,
-code panels, and more).
-
-### Run a build
-
-```bash
-npm run cli -- build --script projects/hello/build.ts
-```
-
-You get `projects/hello/output/deck.pptx`, a `report.md`, and (if LibreOffice is
-installed) `output/screenshots/*.png`.
+The build produces `projects/hello/output/deck.pptx`, a `report.md`, and (if
+LibreOffice is installed) `output/screenshots/*.png`. See
+[`custom-template-instructions.md`](custom-template-instructions.md) for the full
+scratch-building guide and ten worked layouts.
 
 ---
 
@@ -321,6 +342,8 @@ it render correctly everywhere, even on a machine that lacks the font.
 
 ## CLI
 
+These are the commands the skills run for you. You can also run them directly.
+
 ```bash
 npm run cli -- ingest --source <file.pptx> --template <name> [--slide <n> | --split]
 npm run cli -- build  --script <project>/build.ts
@@ -342,19 +365,34 @@ npm run self-validate    # end-to-end: ingest, build, and check a deck
 
 ## Skills
 
-The [`skills/`](skills) folder holds instructions for an AI coding agent
-(Claude Code, Codex, and similar) to run the workflow for you. Point your agent's
-skills directory at this folder (or symlink each one) and it can:
+The [`skills/`](skills) folder is the main way to use pptx-gen. Each skill is a
+`SKILL.md` that teaches an AI coding agent (Claude Code, Codex, and similar) the
+whole workflow, including the exact CLI commands to run, so the agent drives the
+tool end to end from a plain-language request.
 
-- **`pptx-deck`** — turn a brief or notes into a finished deck: choose templates,
-  write `build.ts`, run the generator, review screenshots, and return the `.pptx`.
-- **`ingest-slide-templates`** — import slides from a `.pptx` into the library and
-  document each one.
+- **`pptx-deck`** — turn a brief or notes into a finished deck: read the design,
+  choose templates or design slides from scratch, write `build.ts`, run
+  `npm run cli -- build`, review screenshots, and return the `.pptx`.
+- **`ingest-slide-templates`** — import slides from a `.pptx` into the library
+  (`npm run cli -- ingest`) and document each one.
 - **`draft-slide-template-description`** — write a template's `description.md` from
   its screenshot or fields.
-- **`customize-design`** — retarget the design system to a brand.
+- **`customize-design`** — retarget the design system (`src/design.ts` +
+  `design.md`) to a brand.
 
-Each skill is a plain `SKILL.md` you can also just read and follow by hand.
+### Wire them into your agent
+
+Claude Code discovers skills under `.claude/skills/`. Symlink this repo's skills
+in once:
+
+```bash
+mkdir -p ~/.claude/skills
+ln -s "$(pwd)/skills/"* ~/.claude/skills/
+```
+
+Then just ask, from inside the repo: *"Build a deck about …"*. Other agents:
+point their skills/instructions directory at [`skills/`](skills) the same way, or
+open a `SKILL.md` and follow it by hand — they are plain Markdown.
 
 ---
 
