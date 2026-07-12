@@ -46,12 +46,17 @@ export function createCustomSlideHelpers(options: {
   const { projectDir, assetsDir, shapeType } = options;
 
   return {
+    // The trailing accent underscore is opt-in: pass a header ending in "_" to
+    // render it (e.g. "Table of contents_"). A plain header gets no underscore.
     addHeader(slide: Slide, text: string, opts: { light?: boolean } = {}) {
-      const label = text.endsWith("_") ? text.slice(0, -1) : text;
-      slide.addText([
-        { text: label, options: { color: opts.light === false ? C.white : C.ink } },
-        { text: "_", options: { color: C.accent } }
-      ], {
+      const accentUnderscore = text.endsWith("_");
+      const label = accentUnderscore ? text.slice(0, -1) : text;
+      const color = opts.light === false ? C.white : C.ink;
+      const runs: TextRun[] = [{ text: label, options: { color } }];
+      if (accentUnderscore) {
+        runs.push({ text: "_", options: { color: C.accent } });
+      }
+      slide.addText(runs, {
         x: LAYOUT.LM,
         y: 0.28,
         w: LAYOUT.CW,
@@ -168,6 +173,36 @@ export function createCustomSlideHelpers(options: {
           margin: 0
         });
       }
+    },
+
+    // A native stand-in for a photo or graphic the user should supply later.
+    // Draws a soft grey box with a dashed border and a centered italic caption
+    // describing what belongs there. It stays editable in PowerPoint and Google
+    // Slides. Use it only when a real image genuinely helps and cannot be built
+    // from native shapes; do not overuse it.
+    addImagePlaceholder(slide: Slide, opts: Box & { caption: string }) {
+      slide.addShape(shapeType.roundRect, {
+        x: opts.x,
+        y: opts.y,
+        w: opts.w,
+        h: opts.h,
+        fill: { color: C.grey10 },
+        line: { color: C.grey30, width: 1, dashType: "dash" },
+        rectRadius: 0.06
+      });
+      slide.addText(opts.caption, {
+        x: opts.x + 0.2,
+        y: opts.y,
+        w: opts.w - 0.4,
+        h: opts.h,
+        fontSize: 10,
+        fontFace: FONTS.sans,
+        italic: true,
+        color: C.muted,
+        align: "center",
+        valign: "middle",
+        margin: 0
+      });
     },
 
     addArrow(slide: Slide, opts: {

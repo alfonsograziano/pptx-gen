@@ -154,6 +154,39 @@ Rules:
 - Keep custom slide content deterministic and local.
 - Inspect screenshots for every custom slide when available.
 
+### 4b. Image placeholders
+
+Images carry meaning that text cannot, and they pair well with text — a screenshot,
+a product photo, a logo, a chart the tool cannot draw. Whenever the content would
+genuinely be stronger with an image **that is not a diagram you can build from
+native shapes**, do not leave a blank gap and do not fake the picture. Drop a
+**placeholder**: a grey box with a centered italic caption saying exactly what the
+image should show, so the user can drop the real asset in later.
+
+Use the helper on any custom slide:
+
+```ts
+helpers.addImagePlaceholder(slide, {
+  x: 5.2, y: 1.6, w: 4.0, h: 3.0,
+  caption: "Screenshot of the dashboard's alerts panel",
+});
+```
+
+On a **cloned template** slide, use the `addSvg` override with a grey box SVG, or
+prefer a custom slide when the layout is image-led.
+
+Rules:
+
+- **Do not overuse it.** Reach for a placeholder only when an image clearly adds
+  value; most slides need none. Never use it to pad a thin slide.
+- **Build diagrams, flows, icons, and charts natively instead** (see 4a) — a
+  placeholder is for real-world imagery the tool cannot draw, not for artwork you
+  could express as shapes.
+- **Write a specific caption.** "Photo of the team on stage at re:Invent 2024",
+  not "image here". The caption is the brief for whoever supplies the asset.
+- **The user steers this.** If they ask for more or fewer images, or to turn
+  placeholders off entirely, follow that. When in doubt, prefer fewer.
+
 ### 5. Run and self-heal
 
 From the repo root:

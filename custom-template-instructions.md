@@ -32,7 +32,7 @@ See `design.md` for the full system. In short:
 - Use the `sans` font for normal text.
 - Use the `serif` font only for quotes, callouts, and emphasis.
 - Use sentence case.
-- Content headers end with `_`, with the underscore in the `accent` colour.
+- Content headers may end with an optional `_`, rendered in the `accent` colour. It is opt-in: pass a header ending in `_` to show it, or a plain header to omit it.
 - Use `ink` text on white backgrounds, and white text on `ink` backgrounds.
 - Do not put small readable text on a vivid accent fill.
 - Use `accent` for accent bars, icons, and rules; use `accent2` / `accent3` for
@@ -798,6 +798,7 @@ export function exerciseSlide(input: {
 ## Diagram guidance
 
 - Build diagrams from native shapes, lines, and text so they stay editable in Google Slides. Do not render a diagram as one SVG/PNG image.
+- For real-world imagery the tool cannot draw (a photo, screenshot, logo, or chart), do not fake it: drop `helpers.addImagePlaceholder(slide, { x, y, w, h, caption })` — a grey box with a centered italic caption describing what belongs there — so the user can supply the asset later. Use it sparingly and write a specific caption; build anything that can be a shape natively instead.
 - Use `addVectorIcon` / `addIcon` for icons (native custom geometry), never icons-as-images.
 - Use boxes for systems, services, actors, or steps.
 - Use arrows for data flow, control flow, or sequence.
@@ -811,7 +812,7 @@ export function exerciseSlide(input: {
 ## Quality checklist
 
 - The slide has a clear job.
-- The title is sentence case and ends with `_`.
+- The title is sentence case (an accent `_` at the end is optional).
 - Text is legible at presentation size.
 - Nothing overlaps the footer.
 - Arrows touch the right visual targets.

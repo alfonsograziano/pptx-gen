@@ -107,9 +107,11 @@ but they give a deck a consistent rhythm.
 
 - **Backgrounds.** White for standard content slides; `ink` for covers, section
   breaks, and closing slides.
-- **Header underscore.** Content-slide headers end with a trailing `_` rendered in
-  `accent` (for example `Table of contents_`). The header text is `sans` 14pt,
-  `ink` on light backgrounds and white on dark. Covers and closing slides skip it.
+- **Header underscore (optional).** A header can end with a trailing `_` rendered
+  in `accent` as a small flourish (for example `Table of contents_`). It is
+  opt-in, not automatic: pass a header ending in `_` to get it, or a plain header
+  to omit it. The header text is `sans` 14pt, `ink` on light backgrounds and white
+  on dark. Covers and closing slides skip the header entirely.
 - **Footer.** A page number bottom-left in `muted` (`sans` 7pt) plus an optional
   logo mark bottom-right.
 

@@ -9,6 +9,7 @@ projects/*/output/**/*.pdf
 
 # Example authoring artifacts.
 examples/screenshots/
+examples/**/output/screenshots/
 examples/**/*.pdf
 
 # Intermediate PDFs left next to any rendered screenshots.
