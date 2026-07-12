@@ -4,7 +4,7 @@ A standard content slide: a header, a lead statement, and up to about four bulle
 
 ## Layout
 - White background.
-- Header top-left ending in an accent underscore.
+- Header top-left.
 - A serif lead statement below the header.
 - A single bulleted list (about three to four points) filling the lower half.
 - Page number and optional logo mark in the footer.
@@ -17,6 +17,6 @@ A standard content slide: a header, a lead statement, and up to about four bulle
 - More than four or five bullets, or content that needs columns, icons, or a diagram: build a custom slide or a richer template.
 
 ## Fields
-- `section-header` — the slide header (keep the trailing `_`; the underscore renders in the accent colour).
+- `section-header` — the slide header.
 - `a-lead-statement-that-frames-the-thr` — the lead statement.
 - `first-supporting-point-that-backs-up` — the bullet list. Pass one string with newlines between bullets, or `md("- a\n- b\n- c")`.

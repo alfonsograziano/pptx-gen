@@ -39,7 +39,7 @@ const contentSlide = new CustomSlide({
   name: "content-lead-bullets",
   background: "light",
   draw({ slide, helpers }) {
-    helpers.addHeader(slide, "Section header_");
+    helpers.addHeader(slide, "Section header");
     slide.addText("A lead statement that frames the three points below.", {
       x: LM, y: 0.95, w: CW, h: 0.9,
       fontSize: 18, fontFace: FONTS.serif, color: C.ink, margin: 0, valign: "top"

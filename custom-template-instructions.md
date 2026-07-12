@@ -32,7 +32,7 @@ See `design.md` for the full system. In short:
 - Use the `sans` font for normal text.
 - Use the `serif` font only for quotes, callouts, and emphasis.
 - Use sentence case.
-- Content headers may end with an optional `_`, rendered in the `accent` colour. It is opt-in: pass a header ending in `_` to show it, or a plain header to omit it.
+- Content slides open with a header top-left, in sentence case.
 - Use `ink` text on white backgrounds, and white text on `ink` backgrounds.
 - Do not put small readable text on a vivid accent fill.
 - Use `accent` for accent bars, icons, and rules; use `accent2` / `accent3` for
@@ -155,8 +155,7 @@ export function twoColumnSlide(input: {
 
       for (const col of columns) {
         helpers.addTextBlock(slide, [
-          { text: col.data.heading, options: { bold: true } },
-          { text: "_", options: { color: C.accent, bold: true, breakLine: true } },
+          { text: col.data.heading, options: { bold: true, breakLine: true } },
           { text: col.data.body, options: { breakLine: Boolean(col.data.bullets?.length) } },
           ...(col.data.bullets ?? []).map((item, index, list) => ({
             text: item,
@@ -812,7 +811,7 @@ export function exerciseSlide(input: {
 ## Quality checklist
 
 - The slide has a clear job.
-- The title is sentence case (an accent `_` at the end is optional).
+- The title is sentence case.
 - Text is legible at presentation size.
 - Nothing overlaps the footer.
 - Arrows touch the right visual targets.

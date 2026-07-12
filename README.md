@@ -51,7 +51,7 @@ operations, not a redraw. Reach for this when you have a branded deck to reuse.
 **Design from scratch** is for slides that do not exist yet. You draw them from
 native shapes, text, and icons, and the [design system](design.md) supplies the
 visual language: the palette, the fonts, the slide grid, and conventions like the
-accent underscore in headers and the footer. Because everything is a native
+header and footer. Because everything is a native
 object, the result stays fully editable. Reach for this for diagrams, flows, code
 panels, tables, timelines, covers, and any layout you would otherwise have to
 hand-build. The [`design.md`](design.md) file is the single place that steers how
@@ -170,7 +170,7 @@ Every text box in a template is an editable **field** with a stable id, listed i
 deck.addSlideFromTemplate({
   templateName: "content-lead-bullets",
   variables: {
-    "section-header": "Why it works_",                    // plain string
+    "section-header": "Why it works",                     // plain string
     "a-lead-statement-that-frames-the-thr": md("**Bold** lead."), // markdown
   },
 });
@@ -191,7 +191,7 @@ When a template almost fits, apply explicit edits:
 ```ts
 deck.addSlideFromTemplate({
   templateName: "content-lead-bullets",
-  variables: { "section-header": "Roadmap_" },
+  variables: { "section-header": "Roadmap" },
   overrides: [
     { op: "hide", target: "a-lead-statement-that-frames-the-thr" },
     { op: "move", target: "section-header", x: 0.75, y: 1.1 },
@@ -221,7 +221,7 @@ deck.addCustomSlide(new CustomSlide({
   name: "callout",
   background: "light",
   draw({ slide, helpers }) {
-    helpers.addHeader(slide, "One clear idea_");   // header + accent underscore
+    helpers.addHeader(slide, "One clear idea");    // sentence-case header
     slide.addText("The statement.", { x: LAYOUT.LM, y: 1, w: LAYOUT.CW, h: 1, fontSize: 24, color: C.ink });
     helpers.addFooter(slide, 2);                   // page number + optional logo
   },
@@ -240,7 +240,7 @@ guide and ten worked layouts.
 Colours, fonts, the slide grid, and optional logos live in one place:
 [`src/design.ts`](src/design.ts), documented in [`design.md`](design.md). This is
 the visual language every scratch-built slide follows: the helpers and design
-tokens read straight from it, so a header's accent underscore, a card's accent
+tokens read straight from it, so a card's accent
 bar, the body font, and the footer all come from the design. **Change `design.ts`
 and every scratch-built slide restyles at once** — no need to touch each slide.
 

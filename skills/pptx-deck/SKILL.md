@@ -217,7 +217,7 @@ different template.
 deck.addSlideFromTemplate({
   templateName: "content-lead-bullets",
   variables: {
-    "section-header": "Why this works_",
+    "section-header": "Why this works",
     "first-supporting-point-that-backs-up": md("Evaluation gates\nHuman approval\nCost controls"),
   },
   overrides: [

@@ -1,6 +1,6 @@
 # Build report
 
-- Generated at: 2026-07-12T14:05:36.078Z
+- Generated at: 2026-07-12T15:19:25.108Z
 - Output: /Users/alfonsograziano/Desktop/pptx-gen/examples/how-it-works/output/how-it-works.pptx
 - Slides built: 1
 - Templates used: 

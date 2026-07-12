@@ -5,7 +5,7 @@ fields:
     type: text
     shapeId: "2"
     name: Text 0
-    originalText: Section header_
+    originalText: Section header
     preserveStyleByDefault: true
     x: 0.75
     y: 0.28

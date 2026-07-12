@@ -46,23 +46,15 @@ export function createCustomSlideHelpers(options: {
   const { projectDir, assetsDir, shapeType } = options;
 
   return {
-    // The trailing accent underscore is opt-in: pass a header ending in "_" to
-    // render it (e.g. "Table of contents_"). A plain header gets no underscore.
     addHeader(slide: Slide, text: string, opts: { light?: boolean } = {}) {
-      const accentUnderscore = text.endsWith("_");
-      const label = accentUnderscore ? text.slice(0, -1) : text;
-      const color = opts.light === false ? C.white : C.ink;
-      const runs: TextRun[] = [{ text: label, options: { color } }];
-      if (accentUnderscore) {
-        runs.push({ text: "_", options: { color: C.accent } });
-      }
-      slide.addText(runs, {
+      slide.addText(text, {
         x: LAYOUT.LM,
         y: 0.28,
         w: LAYOUT.CW,
         h: 0.45,
         fontSize: 14,
         fontFace: FONTS.sans,
+        color: opts.light === false ? C.white : C.ink,
         margin: 0
       });
     },
