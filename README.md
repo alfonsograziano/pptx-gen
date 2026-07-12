@@ -1,12 +1,20 @@
 # pptx-gen
 
-Build editable PowerPoint decks from real slide templates.
+Build editable PowerPoint decks two ways: clone real slide templates, or design
+slides from scratch.
 
-pptx-gen ingests slides from a `.pptx` file, keeps each slide's exact visual
-structure, and lets you fill the text and apply small edits to produce a new
-`.pptx`. It **clones and fills** real slides instead of redrawing them, so the
-fonts, shapes, arrows, images, and layout stay pixel-identical to the originals.
-The output opens cleanly in PowerPoint, Keynote, and Google Slides.
+pptx-gen gives you two modes that mix freely in one deck:
+
+- **Clone and fill.** Ingest slides from a `.pptx`, keep each slide's exact visual
+  structure, fill the text, and apply small edits. It copies the original slide
+  instead of redrawing it, so fonts, shapes, arrows, images, and layout stay
+  pixel-identical to the source.
+- **Design from scratch.** Draw slides from native shapes, text, lines, and vector
+  icons, guided by a customizable [design system](design.md). No template needed.
+  Everything stays editable and recolorable in PowerPoint and Google Slides.
+
+Either way the output is a real `.pptx` that opens cleanly in PowerPoint, Keynote,
+and Google Slides.
 
 It ships with:
 
@@ -20,13 +28,26 @@ It ships with:
 
 ---
 
-## Why clone-and-fill
+## Two ways to build a deck
 
-Rebuilding a complex slide from code is brittle: it loses circles, dashed
-connectors, arrowheads, exact title sizes, and embedded fonts. pptx-gen instead
-copies the original slide's XML and changes only what you ask it to. The template
-slide is the source of truth. You can still add, move, delete, and restyle
-elements, but those are explicit operations, not a redraw.
+**Clone and fill** is for slides that already exist. Rebuilding a complex slide
+from code is brittle: it loses circles, dashed connectors, arrowheads, exact
+title sizes, and embedded fonts. pptx-gen instead copies the original slide's XML
+and changes only what you ask it to. The template slide is the source of truth;
+you can still add, move, delete, and restyle elements, but those are explicit
+operations, not a redraw. Reach for this when you have a branded deck to reuse.
+
+**Design from scratch** is for slides that do not exist yet. You draw them from
+native shapes, text, and icons, and the [design system](design.md) supplies the
+visual language: the palette, the fonts, the slide grid, and conventions like the
+accent underscore in headers and the footer. Because everything is a native
+object, the result stays fully editable. Reach for this for diagrams, flows, code
+panels, tables, timelines, covers, and any layout you would otherwise have to
+hand-build. The [`design.md`](design.md) file is the single place that steers how
+these slides look, so changing it restyles every scratch-built slide at once.
+
+Most real decks use both: cloned slides where a template fits, scratch-built
+slides where none does.
 
 ---
 
@@ -50,16 +71,20 @@ npm install
 
 ## Quick start
 
-The repo ships two example templates (`title-cover` and `content-lead-bullets`).
-Create a deck project and a build script:
+Every deck is a small `build.ts` script inside a `projects/<name>/` folder, run by
+the CLI. Create one:
 
 ```bash
 mkdir -p projects/hello/output
 ```
 
-`projects/hello/build.ts`:
+### Clone and fill a template
+
+The repo ships two example templates (`title-cover` and `content-lead-bullets`).
+Fill their fields by id:
 
 ```ts
+// projects/hello/build.ts
 import { Presentation, md } from "../../src/index.js";
 
 const deck = new Presentation({
@@ -93,7 +118,55 @@ await deck.render({
 });
 ```
 
-Run it:
+### Design a slide from scratch
+
+No template needed. Draw with native shapes, text, and the design helpers, which
+read the palette, fonts, and grid from [`design.md`](design.md) /
+[`src/design.ts`](src/design.ts):
+
+```ts
+// projects/hello/build.ts
+import { Presentation, CustomSlide, C, FONTS, LAYOUT } from "../../src/index.js";
+
+const { LM, CW } = LAYOUT;
+
+const deck = new Presentation({ title: "Hello deck", projectDir: "projects/hello" });
+
+// A cover, drawn from scratch on a dark background.
+deck.addCustomSlide(new CustomSlide({
+  name: "cover",
+  background: "dark",
+  draw({ slide }) {
+    slide.addText("Designed from scratch", {
+      x: LM, y: 2, w: CW, h: 1, fontSize: 32, color: C.white, fontFace: FONTS.sans, margin: 0,
+    });
+  },
+}));
+
+// Three cards, using the built-in helpers so they follow the design system.
+deck.addCustomSlide(new CustomSlide({
+  name: "pillars",
+  background: "light",
+  draw({ slide, helpers }) {
+    helpers.addHeader(slide, "Three pillars_");
+    ["Discover", "Build", "Measure"].forEach((heading, i) =>
+      helpers.addCard(slide, {
+        x: LM + i * 2.95, y: 1.6, w: 2.7, h: 2.6,
+        heading, body: "A short supporting line.", accent: C.accent,
+      }),
+    );
+    helpers.addFooter(slide, 2);
+  },
+}));
+
+await deck.render({ output: "output/deck.pptx", report: "output/report.md" });
+```
+
+See [`custom-template-instructions.md`](custom-template-instructions.md) for the
+full guide and ten worked layouts (callouts, comparisons, timelines, diagrams,
+code panels, and more).
+
+### Run a build
 
 ```bash
 npm run cli -- build --script projects/hello/build.ts
@@ -174,40 +247,46 @@ Available operations: `delete`, `hide`, `move`, `resize`, `styleText`,
 or shape names. Use overrides sparingly; if a slide needs many, pick a different
 template or build a custom slide.
 
-### Custom slides
+### Slides from scratch (custom slides)
 
-When no template fits (diagrams, flows, code panels, tables, timelines), draw a
-slide from native shapes with PptxGenJS. See
-[`custom-template-instructions.md`](custom-template-instructions.md) for the full
-guide and ten worked examples. In short:
+A `CustomSlide` draws a slide from native shapes, text, lines, and vector icons.
+This is a first-class way to build a deck, not just a fallback: covers, section
+breaks, diagrams, flows, code panels, tables, and timelines are all built this
+way. Add them to a deck alongside cloned slides in any order:
 
 ```ts
-import { Presentation, CustomSlide, C, LAYOUT } from "../../src/index.js";
-
-const deck = new Presentation({ templateLibrary: "templates", projectDir: "projects/hello" });
-
 deck.addCustomSlide(new CustomSlide({
   name: "callout",
   background: "light",
   draw({ slide, helpers }) {
-    helpers.addHeader(slide, "One clear idea_");
+    helpers.addHeader(slide, "One clear idea_");   // header + accent underscore
     slide.addText("The statement.", { x: LAYOUT.LM, y: 1, w: LAYOUT.CW, h: 1, fontSize: 24, color: C.ink });
-    helpers.addFooter(slide, 2);
+    helpers.addFooter(slide, 2);                   // page number + optional logo
   },
 }));
 ```
 
-Build everything from native shapes, text, lines, and vector icons so it stays
-editable and recolorable in Google Slides.
+The `draw` callback receives helpers (`addHeader`, `addFooter`, `addCard`,
+`addArrow`, `addConnector`, `addIcon`, `addVectorIcon`, `addCodePanel`, …) and the
+design tokens (`C`, `FONTS`, `LAYOUT`). Build everything from native objects so it
+stays editable and recolorable in PowerPoint and Google Slides.
+[`custom-template-instructions.md`](custom-template-instructions.md) has the full
+guide and ten worked layouts.
 
-### The design system
+### The design system: visual guidance for scratch-built slides
 
 Colours, fonts, the slide grid, and optional logos live in one place:
-[`src/design.ts`](src/design.ts), documented in [`design.md`](design.md). The
-design applies to custom slides and to elements the engine adds; it does not
-restyle the baked-in pixels of a cloned template. To retarget it to your brand,
-edit both files (or run the `customize-design` skill), then optionally
-`npm run install-fonts`.
+[`src/design.ts`](src/design.ts), documented in [`design.md`](design.md). This is
+the visual language every scratch-built slide follows: the helpers and design
+tokens read straight from it, so a header's accent underscore, a card's accent
+bar, the body font, and the footer all come from the design. **Change `design.ts`
+and every scratch-built slide restyles at once** — no need to touch each slide.
+
+The design steers custom slides and any elements the engine adds (added text,
+icons). It does not repaint the baked-in pixels of a cloned template: those keep
+the exact look they were imported with. To retarget the design to your brand, edit
+`design.ts` and `design.md` together (or run the `customize-design` skill), then
+optionally `npm run install-fonts`.
 
 ### Icons
 

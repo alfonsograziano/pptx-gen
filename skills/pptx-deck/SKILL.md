@@ -13,8 +13,11 @@ their editable text fields, applies explicit overrides, can add project-local
 custom slides when no template fits, renders screenshots (if LibreOffice is
 installed), and writes a build report.
 
-Use cloned template slides as the default source of truth. Only create custom
-slides when the template library cannot express the slide intent.
+You can clone template slides, design slides from scratch, or mix both in one
+deck. Cloning is fastest when a suitable template exists and you want to preserve
+an existing look; designing from scratch is the right path when no template fits,
+when the deck is bespoke, or when there is no template library yet. Prefer cloning
+only when a genuinely suitable template exists.
 
 ## Fixed paths (relative to the repo root)
 
@@ -116,11 +119,13 @@ Rules:
 - Keep the script deterministic: no LLM calls, network calls, changing dates, or
   random values during render.
 
-### 4a. Use custom slides only when needed
+### 4a. Design slides from scratch
 
-If no template fits a slide's intent, read `custom-template-instructions.md`
-first, then create `projects/<deck-id>/custom.ts` with named layout functions and
-call them from `build.ts`:
+For any slide with no fitting template (covers, section breaks, diagrams, flows,
+code panels, tables, timelines, or a bespoke look), read
+`custom-template-instructions.md` first, then create
+`projects/<deck-id>/custom.ts` with named layout functions and call them from
+`build.ts`:
 
 ```ts
 import { Presentation } from "../../src/index.js";
