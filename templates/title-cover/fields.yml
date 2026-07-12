@@ -1,0 +1,33 @@
+templateId: title-cover
+librarySlide: 0
+fields:
+  - id: overline-label
+    type: text
+    shapeId: "2"
+    name: Text 0
+    originalText: Overline label
+    preserveStyleByDefault: true
+    x: 0.75
+    y: 1.35
+    w: 8.75
+    h: 0.35
+  - id: your-presentation-title-goes-here
+    type: text
+    shapeId: "3"
+    name: Text 1
+    originalText: Your presentation title goes here
+    preserveStyleByDefault: true
+    x: 0.75
+    y: 1.75
+    w: 8.75
+    h: 1.4
+  - id: a-short-subtitle-that-sets-up-the-st
+    type: text
+    shapeId: "4"
+    name: Text 2
+    originalText: A short subtitle that sets up the story in one line.
+    preserveStyleByDefault: true
+    x: 0.75
+    y: 3.25
+    w: 8.75
+    h: 0.6

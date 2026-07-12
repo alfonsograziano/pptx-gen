@@ -1,0 +1,45 @@
+templateId: content-lead-bullets
+librarySlide: 0
+fields:
+  - id: section-header
+    type: text
+    shapeId: "2"
+    name: Text 0
+    originalText: Section header_
+    preserveStyleByDefault: true
+    x: 0.75
+    y: 0.28
+    w: 8.75
+    h: 0.45
+  - id: a-lead-statement-that-frames-the-thr
+    type: text
+    shapeId: "3"
+    name: Text 1
+    originalText: A lead statement that frames the three points below.
+    preserveStyleByDefault: true
+    x: 0.75
+    y: 0.95
+    w: 8.75
+    h: 0.9
+  - id: first-supporting-point-that-backs-up
+    type: text
+    shapeId: "4"
+    name: Text 2
+    originalText: First supporting point that backs up the lead.Second supporting
+      point with a little more detail.Third supporting point to round out the
+      argument.
+    preserveStyleByDefault: true
+    x: 0.95
+    y: 2.15
+    w: 8.55
+    h: 2.6
+  - id: "2"
+    type: text
+    shapeId: "5"
+    name: Text 3
+    originalText: "-2"
+    preserveStyleByDefault: true
+    x: 0.5
+    y: 5.1
+    w: 0.35
+    h: 0.38

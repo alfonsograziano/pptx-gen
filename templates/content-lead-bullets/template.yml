@@ -1,0 +1,18 @@
+id: content-lead-bullets
+name: Content Lead Bullets
+kind: cloned-slide
+status: draft
+version: 1.0.0
+source:
+  deck: examples/example-source.pptx
+  slide: 2
+  importedOn: 2026-07-12
+fonts:
+  - Inter
+  - Lora
+variables:
+  - section-header
+  - a-lead-statement-that-frames-the-thr
+  - first-supporting-point-that-backs-up
+  - "2"
+tags: []

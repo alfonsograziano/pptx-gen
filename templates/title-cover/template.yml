@@ -1,0 +1,16 @@
+id: title-cover
+name: Title Cover
+kind: cloned-slide
+status: draft
+version: 1.0.0
+source:
+  deck: examples/example-source.pptx
+  slide: 1
+  importedOn: 2026-07-12
+fonts:
+  - Inter
+variables:
+  - overline-label
+  - your-presentation-title-goes-here
+  - a-short-subtitle-that-sets-up-the-st
+tags: []
