@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
-import { C, LAYOUT, LOGO_FILES } from "./brand.js";
+import { C, FONTS, LAYOUT, LOGO_FILES } from "./design.js";
 import { parseSvg, svgToGeomPoints } from "./svg-path.js";
 
 type Slide = {
@@ -49,15 +50,15 @@ export function createCustomSlideHelpers(options: {
     addHeader(slide: Slide, text: string, opts: { light?: boolean } = {}) {
       const label = text.endsWith("_") ? text.slice(0, -1) : text;
       slide.addText([
-        { text: label, options: { color: opts.light === false ? C.white : C.midnight } },
-        { text: "_", options: { color: C.green } }
+        { text: label, options: { color: opts.light === false ? C.white : C.ink } },
+        { text: "_", options: { color: C.accent } }
       ], {
         x: LAYOUT.LM,
         y: 0.28,
         w: LAYOUT.CW,
         h: 0.45,
         fontSize: 14,
-        fontFace: "Inter",
+        fontFace: FONTS.sans,
         margin: 0
       });
     },
@@ -73,28 +74,29 @@ export function createCustomSlideHelpers(options: {
         w: 0.35,
         h: 0.38,
         fontSize: 7,
-        fontFace: "Inter",
-        color: light ? C.mid50 : C.white,
+        fontFace: FONTS.sans,
+        color: light ? C.muted : C.white,
         margin: 0
       });
-      this.addNLogo(slide, { light });
+      this.addLogo(slide, { light });
     },
 
-    addNLogo(slide: Slide, opts: { light?: boolean } = {}) {
-      const file = opts.light ? LOGO_FILES.nMarkColor : LOGO_FILES.nMark;
-      slide.addImage({
-        path: path.join(assetsDir, file),
-        x: 9.3,
-        y: 5.0,
-        w: 0.33,
-        h: 0.26
-      });
+    // Places the small logo mark bottom-right, if the configured PNG exists in
+    // `assets/`. Ships as a no-op until you add your own logo files.
+    addLogo(slide: Slide, opts: { light?: boolean } = {}) {
+      const file = opts.light ? LOGO_FILES.markDark : LOGO_FILES.markLight;
+      const logoPath = path.join(assetsDir, file);
+      if (!existsSync(logoPath)) return;
+      slide.addImage({ path: logoPath, x: 9.3, y: 5.0, w: 0.33, h: 0.26 });
     },
 
+    // Places the full wordmark, if the configured PNG exists in `assets/`.
     addWordmark(slide: Slide, opts: { light?: boolean; x?: number; y?: number; w?: number; h?: number } = {}) {
-      const file = opts.light ? LOGO_FILES.wordmarkLight : LOGO_FILES.wordmarkDark;
+      const file = opts.light ? LOGO_FILES.wordmarkDark : LOGO_FILES.wordmarkLight;
+      const logoPath = path.join(assetsDir, file);
+      if (!existsSync(logoPath)) return;
       slide.addImage({
-        path: path.join(assetsDir, file),
+        path: logoPath,
         x: opts.x ?? LAYOUT.LM,
         y: opts.y ?? 0.62,
         w: opts.w ?? 1.8,
@@ -111,8 +113,8 @@ export function createCustomSlideHelpers(options: {
       slide.addText(runs, {
         ...box,
         fontSize: style.fontSize as number | undefined ?? 10,
-        fontFace: style.fontFace as string | undefined ?? "Inter",
-        color: style.color as string | undefined ?? C.midnight,
+        fontFace: style.fontFace as string | undefined ?? FONTS.sans,
+        color: style.color as string | undefined ?? C.ink,
         lineSpacingMultiple: style.lineSpacingMultiple as number | undefined ?? LAYOUT.LS,
         valign: style.valign as string | undefined ?? "top",
         margin: style.margin as number | undefined ?? 0,
@@ -126,7 +128,7 @@ export function createCustomSlideHelpers(options: {
       accent?: string;
       fill?: string;
     }) {
-      const accent = stripHash(opts.accent ?? C.green);
+      const accent = stripHash(opts.accent ?? C.accent);
       const fill = stripHash(opts.fill ?? C.white);
       slide.addShape(shapeType.rect, {
         x: opts.x,
@@ -149,8 +151,8 @@ export function createCustomSlideHelpers(options: {
         w: opts.w - 0.28,
         h: 0.34,
         fontSize: 12,
-        fontFace: "Bitter",
-        color: C.midnight,
+        fontFace: FONTS.serif,
+        color: C.ink,
         margin: 0
       });
       if (opts.body) {
@@ -160,8 +162,8 @@ export function createCustomSlideHelpers(options: {
           w: opts.w - 0.28,
           h: Math.max(0.2, opts.h - 0.76),
           fontSize: 9.5,
-          fontFace: "Inter",
-          color: C.midnight,
+          fontFace: FONTS.sans,
+          color: C.ink,
           lineSpacingMultiple: LAYOUT.LS,
           valign: "top",
           margin: 0
@@ -184,7 +186,7 @@ export function createCustomSlideHelpers(options: {
         w: opts.to.x - opts.from.x,
         h: opts.to.y - opts.from.y,
         line: {
-          color: stripHash(opts.color ?? C.mid50),
+          color: stripHash(opts.color ?? C.muted),
           width: opts.width ?? 1.2,
           dashType: opts.dashed ? "dash" : "solid",
           beginArrowType: opts.beginArrowType ?? "none",
@@ -234,12 +236,12 @@ export function createCustomSlideHelpers(options: {
         y: box.y,
         w: box.w,
         h: box.h,
-        line: { color: stripHash(opts.color ?? C.midnight), width: strokeWidth, cap: "round" },
+        line: { color: stripHash(opts.color ?? C.ink), width: strokeWidth, cap: "round" },
         points
       });
     },
 
-    // Embeds a rasterized PNG of the SVG when LibreOffice is available. PptxGenJS
+    // Embeds a rasterized PNG of the SVG when a rasterizer is available. PptxGenJS
     // embeds SVG images with a "broken image" raster fallback that Google Slides
     // (and older PowerPoint) show instead of the vector, so we ship a real PNG and
     // fall back to the raw SVG only when no rasterizer is available.
@@ -272,8 +274,8 @@ export function createCustomSlideHelpers(options: {
         y: opts.y,
         w: opts.w,
         h: panelH,
-        fill: { color: C.midnight },
-        line: { color: C.midnight, width: 0 },
+        fill: { color: C.ink },
+        line: { color: C.ink, width: 0 },
         rectRadius: 0.06
       });
       slide.addText(lines.map((line, index) => {
@@ -282,7 +284,7 @@ export function createCustomSlideHelpers(options: {
         return {
           text: line === "" ? " " : line,
           options: {
-            color: isComment ? C.green : C.white,
+            color: isComment ? C.accent : C.white,
             breakLine: index < lines.length - 1
           }
         };
@@ -292,7 +294,7 @@ export function createCustomSlideHelpers(options: {
         w: opts.w - 0.44,
         h: panelH - 0.28,
         fontSize: 10.5,
-        fontFace: opts.fontFace ?? "Consolas",
+        fontFace: opts.fontFace ?? FONTS.mono,
         lineSpacingMultiple: 1.18,
         valign: "top",
         margin: 0

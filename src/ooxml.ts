@@ -4,6 +4,7 @@ import { PptxPackage } from "./pptx-package.js";
 import type { BuildWarning, SlideOverride, TemplateField, TextStyle } from "./types.js";
 import { richTextToPlain } from "./rich-text.js";
 import { asArray, buildXml, escapeXml, parseXml, unescapeXml } from "./xml.js";
+import { C, FONTS } from "./design.js";
 
 const EMU_PER_IN = 914400;
 const SLIDE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
@@ -607,8 +608,8 @@ function insertShape(slideXml: string, shapeXml: string): string {
 
 function createTextShape(id: string, text: string, x: number, y: number, w: number, h: number, style: TextStyle = {}): string {
   const shapeId = nextRuntimeShapeId();
-  const color = (style.color ?? "000E38").replace(/^#/, "");
-  return `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="${escapeXml(id)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${inToEmu(x)}" y="${inToEmu(y)}"/><a:ext cx="${inToEmu(w)}" cy="${inToEmu(h)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square"><a:noAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="l"><a:buNone/></a:pPr><a:r><a:rPr lang="en" sz="${Math.round((style.fontSize ?? 10) * 100)}"${style.bold ? ` b="1"` : ""}${style.italic ? ` i="1"` : ""}><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${escapeXml(style.fontFace ?? "Inter")}"/></a:rPr><a:t>${escapeXml(text)}</a:t></a:r><a:endParaRPr/></a:p></p:txBody></p:sp>`;
+  const color = (style.color ?? C.ink).replace(/^#/, "");
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="${escapeXml(id)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${inToEmu(x)}" y="${inToEmu(y)}"/><a:ext cx="${inToEmu(w)}" cy="${inToEmu(h)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square"><a:noAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="l"><a:buNone/></a:pPr><a:r><a:rPr lang="en" sz="${Math.round((style.fontSize ?? 10) * 100)}"${style.bold ? ` b="1"` : ""}${style.italic ? ` i="1"` : ""}><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${escapeXml(style.fontFace ?? FONTS.sans)}"/></a:rPr><a:t>${escapeXml(text)}</a:t></a:r><a:endParaRPr/></a:p></p:txBody></p:sp>`;
 }
 
 function createPictureShape(id: string, relId: string, x: number, y: number, w: number, h: number): string {

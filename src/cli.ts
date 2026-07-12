@@ -8,8 +8,8 @@ import { validatePackage } from "./ooxml.js";
 const program = new Command();
 
 program
-  .name("nearform-pptx")
-  .description("Nearform filesystem PPTX template generator")
+  .name("pptx-gen")
+  .description("Filesystem-based PPTX template ingestion and deck generation")
   .version("0.1.0");
 
 program

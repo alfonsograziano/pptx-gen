@@ -1,34 +1,32 @@
 /**
- * Ensure every font the template library needs is available.
+ * Install the design's fonts locally, and report font coverage across the
+ * template library.
  *
- * The script scans all templates, lists the typefaces they require, and reports
- * two kinds of coverage for each:
+ * This step is OPTIONAL. Decks are self-contained: each template embeds the font
+ * binaries it uses, so a generated .pptx renders correctly in PowerPoint, Keynote,
+ * and Google Slides even on a machine that has never seen the font. You only need
+ * local fonts for two things:
  *
- *  - "embedded": the font binary travels inside the template's PPTX, so any deck
- *    built from it is self-contained and renders correctly even on a machine
- *    that has never seen the font. This is what the generator relies on.
- *  - "system":  the font is installed on this machine, which matters for editing
- *    the PPTX natively in PowerPoint / Keynote and for local LibreOffice renders.
+ *  - editing a generated .pptx natively in a desktop app, and
+ *  - crisp local screenshots when LibreOffice is installed (see `src/render.ts`).
  *
- * The Nearform brand families (Inter, Bitter, Lexend) are installed from Google
- * Fonts. Families that are not in the catalogue and not embedded anywhere are
+ * The families come from `src/design.ts` (`FONTS`). They are fetched from Google
+ * Fonts. Families that are neither in the catalogue nor embedded anywhere are
  * reported as a hard gap so you can decide on a fallback.
  *
  * IMPORTANT — why we install STATIC instances, not variable fonts:
  * Google ships these families as variable fonts (one `Family[wght].ttf` file).
  * LibreOffice on macOS cannot resolve those variable files: it fails to match
- * the requested family and silently substitutes a default sans-serif. That is
- * why the PDF / screenshot renders showed the wrong font (e.g. Bitter, a serif,
- * came out sans-serif) even though Google Slides — which reads the font embedded
- * in the PPTX — looked correct. The variable Bitter file also defaults to its
+ * the requested family and silently substitutes a default sans-serif, so a serif
+ * can come out sans-serif in a screenshot even though the embedded font (what
+ * Google Slides reads) looks correct. The variable file may also default to a
  * "Thin" instance, which compounds the mismatch.
  *
  * The fix: download per-weight STATIC instances via the Google Fonts CSS2 API
  * (the same files Google serves to browsers). Each static file registers with a
- * clean family name ("Bitter", "Bitter Medium", "Inter SemiBold", ...) that
- * LibreOffice resolves reliably, so local renders match what clients see. We
- * also delete any previously installed variable brand files so the broken ones
- * can no longer shadow the good static ones.
+ * clean family name that LibreOffice resolves reliably, so local renders match
+ * what viewers see. We also delete any previously installed variable files for
+ * these families so the broken ones can no longer shadow the good static ones.
  */
 import { access, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
@@ -38,6 +36,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PptxPackage } from "./pptx-package.js";
 import { extractFonts } from "./ooxml.js";
+import { FONTS } from "./design.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -49,16 +48,18 @@ const USER_FONT_DIR = path.join(os.homedir(), "Library", "Fonts");
 // the renderer's own substitution.
 const GENERIC_FONTS = new Set(["Arial", "Calibri", "Aptos", "Helvetica", "Times New Roman"]);
 
-// Brand font families and the static weights to install for each. We install a
-// generous set so any deck's chosen weights resolve, including the bold variant
-// used when a run sets b="1". Each weight becomes its own static .ttf file.
+// The design's font families and the static weights to install for each. We
+// install a generous set so any deck's chosen weights resolve, including the bold
+// variant used when a run sets b="1". Each weight becomes its own static .ttf
+// file. Families come from `src/design.ts`, so changing the design changes what
+// gets installed.
 //
 // We deliberately do NOT use the variable `Family[wght].ttf` files here: see the
 // file header for why LibreOffice cannot render them.
-const BRAND_FONTS: Record<string, { weights: number[]; italicWeights: number[] }> = {
-  Inter: { weights: [300, 400, 500, 600, 700, 900], italicWeights: [400, 700] },
-  Bitter: { weights: [400, 500, 700], italicWeights: [400, 500, 700] },
-  Lexend: { weights: [400, 500, 700], italicWeights: [] }
+const DESIGN_FONTS: Record<string, { weights: number[]; italicWeights: number[] }> = {
+  [FONTS.sans]: { weights: [300, 400, 500, 600, 700, 900], italicWeights: [400, 700] },
+  [FONTS.serif]: { weights: [400, 500, 700], italicWeights: [400, 500, 700] },
+  [FONTS.mono]: { weights: [400, 500, 700], italicWeights: [] }
 };
 
 // Weight number -> the word Google Fonts uses, for human-readable file names.
@@ -67,14 +68,13 @@ const WEIGHT_NAMES: Record<number, string> = {
   500: "Medium", 600: "SemiBold", 700: "Bold", 800: "ExtraBold", 900: "Black"
 };
 
-// The variable brand files the old version of this script installed. They make
-// LibreOffice substitute a wrong (sans-serif) font, so we remove them before
-// installing the static replacements.
-const STALE_VARIABLE_FILES = [
-  "Inter.ttf", "Inter-Italic.ttf",
-  "Bitter.ttf", "Bitter-Italic.ttf",
-  "Lexend.ttf", "Lexend-Italic.ttf"
-];
+// Variable font files that would make LibreOffice substitute a wrong font, one
+// pair per design family. We remove them before installing the static
+// replacements so a leftover variable file cannot shadow the good static one.
+const STALE_VARIABLE_FILES = Object.keys(DESIGN_FONTS).flatMap((family) => {
+  const base = family.replace(/ /g, "");
+  return [`${base}.ttf`, `${base}-Italic.ttf`];
+});
 
 // A deliberately ancient User-Agent so the Google Fonts CSS2 API serves plain
 // TrueType (.ttf) files. A modern UA gets woff2 (macOS will not install it); a
@@ -165,7 +165,7 @@ async function main(): Promise<void> {
   const installedNow: string[] = [];
   const cannotInstall: string[] = [];
 
-  for (const [family, spec] of Object.entries(BRAND_FONTS)) {
+  for (const [family, spec] of Object.entries(DESIGN_FONTS)) {
     let faces: StaticFace[];
     try {
       faces = await fetchStaticFaces(family, spec.weights, spec.italicWeights);
@@ -210,10 +210,10 @@ async function main(): Promise<void> {
     console.log("Options: install them manually, or accept the renderer's substitution fallback.");
   }
 
-  const stillMissing = [...new Set(cannotInstall)].filter((family) => !BRAND_FONTS[family]);
+  const stillMissing = [...new Set(cannotInstall)].filter((family) => !DESIGN_FONTS[family]);
   if (stillMissing.length) {
     console.log(`\nNo catalogue entry to auto-install: ${stillMissing.join(", ")}.`);
-    console.log("Add the family to BRAND_FONTS in src/install-fonts.ts to support it.");
+    console.log("Add the family to DESIGN_FONTS in src/install-fonts.ts to support it.");
   }
 
   if (installedNow.length || removedStale.length) {

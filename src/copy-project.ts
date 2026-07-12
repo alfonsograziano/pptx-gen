@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 import { PptxPackage } from "./pptx-package.js";
 import { getSlideEntries } from "./ooxml.js";
 import { unescapeXml } from "./xml.js";
+import { C } from "./design.js";
 
 type Slide = { number: number; blocks: string[][] };
 
@@ -158,7 +159,7 @@ function toPlainText(slides: Slide[]): string {
 function toHtml(slides: Slide[]): string {
   const sections = slides
     .map((slide) => {
-      const heading = `<h2 style="color:#000E38;">Slide ${slide.number}</h2>`;
+      const heading = `<h2 style="color:#${C.ink};">Slide ${slide.number}</h2>`;
       const paragraphs = slide.blocks
         .map((lines) => `<p>${lines.map(escapeHtml).join("<br>")}</p>`)
         .join("\n");

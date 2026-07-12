@@ -2,7 +2,7 @@ import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import pptxgenjs from "pptxgenjs";
-import { C, LAYOUT } from "./brand.js";
+import { C, FONTS, LAYOUT } from "./design.js";
 import { createCustomSlideHelpers, type CustomSlideHelpers } from "./custom-slide-helpers.js";
 import { ensureDir } from "./fs.js";
 import { rasterizeSvgToPng } from "./rasterize.js";
@@ -46,7 +46,7 @@ export type CustomSlideContext = {
 
 export type CustomSlideOptions = {
   name: string;
-  background?: "white" | "midnight" | { color: string };
+  background?: "light" | "dark" | { color: string };
   requiredFonts?: string[];
   draw: (context: CustomSlideContext) => void | Promise<void>;
 };
@@ -60,7 +60,7 @@ export class CustomSlide {
   constructor(options: CustomSlideOptions) {
     this.name = options.name;
     this.background = options.background;
-    this.requiredFonts = options.requiredFonts ?? ["Inter", "Bitter"];
+    this.requiredFonts = options.requiredFonts ?? [FONTS.sans];
     this.drawSlide = options.draw;
   }
 
@@ -135,7 +135,7 @@ export async function renderCustomSlidesToPptx(options: {
 }
 
 export async function makeCustomSlideTempPath(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "nearform-custom-slide-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "pptx-gen-custom-slide-"));
   return path.join(dir, "slide.pptx");
 }
 
@@ -143,25 +143,25 @@ function createCustomPresentation(title?: string): Pptx {
   const candidate = pptxgenjs as unknown as { default?: unknown };
   const PptxGenJS = (typeof pptxgenjs === "function" ? pptxgenjs : candidate.default) as new () => Pptx;
   const pptx = new PptxGenJS();
-  pptx.defineLayout({ name: "NEARFORM_WIDE", width: LAYOUT.width, height: LAYOUT.height });
-  pptx.layout = "NEARFORM_WIDE";
-  pptx.author = "Nearform";
-  pptx.company = "Nearform";
-  pptx.subject = title ?? "Nearform presentation";
-  pptx.title = title ?? "Nearform presentation";
+  pptx.defineLayout({ name: "WIDE_16_9", width: LAYOUT.width, height: LAYOUT.height });
+  pptx.layout = "WIDE_16_9";
+  pptx.author = "pptx-gen";
+  pptx.company = "pptx-gen";
+  pptx.subject = title ?? "Presentation";
+  pptx.title = title ?? "Presentation";
   pptx.theme = {
-    headFontFace: "Inter",
-    bodyFontFace: "Inter",
+    headFontFace: FONTS.sans,
+    bodyFontFace: FONTS.sans,
     lang: "en-US"
   };
   return pptx;
 }
 
 function applyBackground(slide: Slide, background: CustomSlideOptions["background"]): void {
-  if (!background || background === "white") {
+  if (!background || background === "light") {
     slide.background = { color: C.white };
-  } else if (background === "midnight") {
-    slide.background = { color: C.midnight };
+  } else if (background === "dark") {
+    slide.background = { color: C.ink };
   } else {
     slide.background = { color: background.color.replace(/^#/, "") };
   }

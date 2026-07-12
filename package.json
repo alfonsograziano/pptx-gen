@@ -1,14 +1,15 @@
 {
-  "name": "nearform-pptx-generator",
-  "version": "1.0.0",
-  "description": "Filesystem-based Nearform PPTX template ingestion and generation.",
+  "name": "pptx-gen",
+  "version": "0.1.0",
+  "description": "Filesystem-based PPTX template ingestion and deck generation. Clone real slides, fill their text, and compile editable PowerPoint decks.",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "src/index.ts",
   "bin": {
-    "nearform-pptx": "./src/cli.ts"
+    "pptx-gen": "./src/cli.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "cli": "tsx src/cli.ts",
     "copy-project": "tsx src/copy-project.ts",
     "ensure-fonts": "tsx src/install-fonts.ts",
@@ -18,11 +19,15 @@
   },
   "keywords": [
     "pptx",
-    "nearform",
-    "slides"
+    "powerpoint",
+    "slides",
+    "presentation",
+    "templates",
+    "generator",
+    "ooxml"
   ],
   "author": "",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "dependencies": {
     "commander": "^12.1.0",
     "fast-xml-parser": "^5.9.3",
@@ -35,5 +40,8 @@
     "@types/node": "^26.0.1",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

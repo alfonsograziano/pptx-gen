@@ -21,6 +21,8 @@ export type PresentationOptions = {
   title?: string;
   templateLibrary?: string;
   projectDir?: string;
+  /** Folder holding icons and logo assets. Defaults to `<templateLibrary>/../assets`. */
+  assetsDir?: string;
 };
 
 export class Presentation {
@@ -34,7 +36,7 @@ export class Presentation {
     this.title = options.title;
     this.templateRoot = path.resolve(options.templateLibrary ?? "templates");
     this.projectDir = path.resolve(options.projectDir ?? process.cwd());
-    this.assetsDir = path.resolve(this.templateRoot, "..", "references");
+    this.assetsDir = path.resolve(options.assetsDir ?? path.resolve(this.templateRoot, "..", "assets"));
   }
 
   addSlideFromTemplate(options: AddSlideOptions): this {
