@@ -33,6 +33,31 @@ where their workspace is, or offer `pptx-gen init <dir>`.
 defaults, it is shared by every workspace, and the user's next update will
 overwrite whatever you put there.
 
+## Read the workspace customizations first
+
+Every workspace has a `customize.md` — the user's house rules for this
+workspace. Read it (the `customize` path from `pptx-gen workspace --json`)
+before anything else, and follow it.
+
+An empty file is normal: it means this workspace has no house rules yet. When it
+does have rules, **they win over the defaults in this skill**. If a rule and
+this skill genuinely contradict each other, follow the rule and say so in your
+final response.
+
+If the file is missing, run `pptx-gen doctor --fix` to create it.
+
+### Write recurring requests into it, unprompted
+
+When the user asks for something that will plainly come up again — "always move
+the finished deck to X", "never use image placeholders", "our decks always open
+with a disclaimer slide" — do not just do it this once. Add it to `customize.md`
+under `## Rules` as one specific bullet saying what to do and when, then tell the
+user in one line that you saved it so they need not repeat it.
+
+The test is whether the user would otherwise have to say it again next time.
+Instructions scoped to the deck in hand ("make slide 3 red") stay out of the
+file.
+
 ## What the design controls (and what it does not)
 
 The design system applies to **custom slides** and to **text/shapes the engine

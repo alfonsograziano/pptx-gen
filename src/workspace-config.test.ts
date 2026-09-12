@@ -31,7 +31,7 @@ test("an unknown key is rejected with a suggestion and the valid list", () => {
       assert.match(error.message, /^\/ws\/pptx-gen\.config\.yml: /);
       assert.match(error.message, /unknown key "template"/);
       assert.match(error.message, /did you mean "templates"/);
-      assert.match(error.message, /Valid keys: version, templates, projects, assets, design, designDoc/);
+      assert.match(error.message, /Valid keys: version, templates, projects, assets, design, designDoc, customize/);
       return true;
     }
   );
