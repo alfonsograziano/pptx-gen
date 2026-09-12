@@ -163,12 +163,26 @@ export async function appendSlideFromPackage(
       if (String(rel["@_TargetMode"]) === "External") continue;
       const target = String(rel["@_Target"] ?? "");
       const resolved = path.posix.normalize(path.posix.join("ppt/slides", target));
-      if (targetPkg.has(resolved)) continue;
       if (resolved.includes("/media/") && srcPkg.has(resolved)) {
-        targetPkg.setBytes(resolved, await srcPkg.bytes(resolved));
-        const ext = path.posix.extname(resolved).slice(1).toLowerCase();
+        // Every source package numbers its own media from `image1`, so two
+        // independently rendered slides routinely both carry `ppt/media/image1.png`
+        // with DIFFERENT bytes. Skipping the copy because the name is taken would
+        // silently point this slide at the other slide's picture, so a clashing
+        // name gets a fresh one and the relationship is repointed at it.
+        const bytes = await srcPkg.bytes(resolved);
+        let mediaPath = resolved;
+        if (targetPkg.has(resolved) && !bytes.equals(await targetPkg.bytes(resolved))) {
+          const ext = path.posix.extname(resolved);
+          const next = nextNumber(targetPkg.files("ppt/media/"), /image(\d+)\./);
+          mediaPath = `ppt/media/image${next}${ext}`;
+          rel["@_Target"] = path.posix.relative("ppt/slides", mediaPath);
+        }
+        if (!targetPkg.has(mediaPath)) targetPkg.setBytes(mediaPath, bytes);
+        const ext = path.posix.extname(mediaPath).slice(1).toLowerCase();
         if (ext) await addDefaultContentType(targetPkg, ext, mediaContentType(ext));
-      } else if (!targetPkg.has(resolved)) {
+      } else if (targetPkg.has(resolved)) {
+        continue;
+      } else {
         warnings.push({
           code: "missing-slide-dependency",
           message: `Slide depends on '${resolved}' which is not present in the deck. The slide may not render correctly.`,
