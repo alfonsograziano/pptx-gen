@@ -4,6 +4,7 @@ import path from "node:path";
 import pptxgenjs from "pptxgenjs";
 import { C, FONTS, LAYOUT } from "./design.js";
 import { createCustomSlideHelpers, type CustomSlideHelpers } from "./custom-slide-helpers.js";
+import type { FigureRenderer } from "./figure.js";
 import { ensureDir } from "./fs.js";
 
 type Pptx = {
@@ -86,6 +87,7 @@ export async function renderCustomSlideToPptx(options: {
   projectDir: string;
   assetsDir: string;
   title?: string;
+  figures?: FigureRenderer;
 }): Promise<void> {
   const pptx = createCustomPresentation(options.title);
   const slide = pptx.addSlide();
@@ -94,6 +96,7 @@ export async function renderCustomSlideToPptx(options: {
     projectDir: options.projectDir,
     assetsDir: options.assetsDir,
     shapeType: pptx.ShapeType,
+    figures: options.figures,
   });
 
   await options.customSlide.draw({
@@ -116,12 +119,14 @@ export async function renderCustomSlidesToPptx(options: {
   projectDir: string;
   assetsDir: string;
   title?: string;
+  figures?: FigureRenderer;
 }): Promise<void> {
   const pptx = createCustomPresentation(options.title);
   const helpers = createCustomSlideHelpers({
     projectDir: options.projectDir,
     assetsDir: options.assetsDir,
     shapeType: pptx.ShapeType,
+    figures: options.figures,
   });
 
   for (const [index, customSlide] of options.customSlides.entries()) {

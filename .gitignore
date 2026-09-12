@@ -12,5 +12,13 @@ examples/screenshots/
 examples/**/output/screenshots/
 examples/**/*.pdf
 
+# Rendered figure artifacts. The authored HTML in <deck>/figures/ is source and
+# is kept; output/figures/ holds the PNG plus a generated copy of the HTML, and
+# is rebuilt on every build. The figure example commits its PNG so the repo is
+# browsable on a machine with no browser installed.
+projects/*/output/figures/
+examples/**/output/figures/
+!examples/figure-mockup/output/figures/
+
 # Intermediate PDFs left next to any rendered screenshots.
 **/screenshots/*.pdf

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The alerts console, with the checkout latency alert firing</title>
+<style>
+:root {
+  --ink: #12182B;
+  --accent: #3B82F6;
+  --white: #FFFFFF;
+  --accent-2: #8B5CF6;
+  --accent-3: #0EA5E9;
+  --surface: #F5F7FA;
+  --muted: #5B6472;
+  --faint: #9AA3B2;
+  --grey-10: #EEF0F3;
+  --grey-30: #D5D9E0;
+  --grey-80: #3A3F4B;
+  --accent-soft: #E8F0FE;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Lora", Georgia, "Times New Roman", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+*, *::before, *::after { box-sizing: border-box; }
+/* Pinned so that rem units mean the same thing regardless of browser defaults. */
+html { font-size: 16px; }
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 1000px;
+  height: 560px;
+  overflow: hidden;
+}
+body {
+  background: var(--white);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+img, svg { max-width: 100%; }
+</style>
+</head>
+<body>
+<!--
+  An HTML figure: a product UI mockup that has no native representation.
+
+  The engine injects the design tokens as CSS custom properties before rendering
+  this with headless Chrome, so every colour and font here comes from
+  `src/design.ts` and follows a rebrand automatically. See figure-instructions.md.
+
+  Designed at 1000x560 CSS px, matching the 4.0 x 2.24in box it sits in.
+-->
+<div class="window">
+  <div class="chrome">
+    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    <div class="url">alerts.internal / incidents</div>
+  </div>
+
+  <div class="body">
+    <nav>
+      <div class="brand">Console</div>
+      <div class="item is-active">Incidents <b>3</b></div>
+      <div class="item">Services</div>
+      <div class="item">Runbooks</div>
+      <div class="item">Settings</div>
+    </nav>
+
+    <main>
+      <div class="banner">
+        <span class="pill">Firing</span>
+        <span class="headline">Checkout latency above 800&thinsp;ms</span>
+        <span class="age">4m</span>
+      </div>
+
+      <table>
+        <tr class="head"><th>Service</th><th>Signal</th><th>Owner</th><th>State</th></tr>
+        <tr><td>checkout-api</td><td>p99 latency</td><td>Payments</td><td><span class="tag tag--hot">Firing</span></td></tr>
+        <tr><td>ledger</td><td>error rate</td><td>Payments</td><td><span class="tag">Ack'd</span></td></tr>
+        <tr><td>search</td><td>saturation</td><td>Discovery</td><td><span class="tag">Resolved</span></td></tr>
+      </table>
+    </main>
+  </div>
+</div>
+
+<style>
+  body { display: grid; place-items: center; }
+
+  .window {
+    width: 940px;
+    border: 1px solid var(--grey-30);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--white);
+  }
+
+  .chrome {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--grey-30);
+  }
+  .dot { width: 12px; height: 12px; border-radius: 999px; background: var(--grey-30); }
+  .url {
+    margin-left: 12px;
+    flex: 1;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: var(--white);
+    border: 1px solid var(--grey-30);
+    color: var(--muted);
+    font-size: 20px;
+  }
+
+  .body { display: grid; grid-template-columns: 240px 1fr; min-height: 400px; }
+
+  nav {
+    padding: 22px 0;
+    border-right: 1px solid var(--grey-30);
+    background: var(--surface);
+  }
+  .brand {
+    padding: 0 22px 18px;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--faint);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .item {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 22px;
+    font-size: 22px;
+    color: var(--muted);
+  }
+  .item.is-active {
+    color: var(--ink);
+    font-weight: 600;
+    background: var(--white);
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+  .item b { color: var(--accent); }
+
+  main { padding: 22px; }
+
+  .banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    border: 1px solid var(--grey-30);
+    border-left: 4px solid var(--accent);
+    border-radius: 4px;
+    background: var(--accent-soft);
+    margin-bottom: 22px;
+  }
+  .pill {
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--white);
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .headline { flex: 1; font-size: 24px; font-weight: 600; }
+  .age { color: var(--muted); font-size: 20px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 21px; }
+  th, td { padding: 14px 10px; text-align: left; border-bottom: 1px solid var(--grey-10); }
+  .head th { color: var(--faint); font-size: 18px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .tag {
+    padding: 4px 12px;
+    border-radius: 4px;
+    background: var(--grey-10);
+    color: var(--muted);
+    font-size: 18px;
+  }
+  .tag--hot { background: var(--accent); color: var(--white); }
+</style>
+
+</body>
+</html>

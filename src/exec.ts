@@ -10,12 +10,16 @@ export const execFileAsync = promisify(execFile);
  *
  * A candidate that looks like a path (absolute, or containing a separator) is
  * checked directly on disk; a bare command name is resolved through `which` /
- * `where`. `envVar`, when set, is tried first so a user can always point the
- * tool at a specific binary.
+ * `where`.
+ *
+ * `envVar`, when set, is authoritative: it replaces the candidate list rather
+ * than being prepended to it. Someone who names a binary explicitly wants that
+ * binary, and quietly falling back to a different one on a typo would be worse
+ * than reporting nothing found.
  */
 export async function findExecutable(candidates: string[], envVar?: string): Promise<string | undefined> {
   const fromEnv = envVar ? process.env[envVar]?.trim() : undefined;
-  for (const candidate of [...(fromEnv ? [fromEnv] : []), ...candidates]) {
+  for (const candidate of fromEnv ? [fromEnv] : candidates) {
     if (!candidate) continue;
     if (isPathLike(candidate)) {
       try {
