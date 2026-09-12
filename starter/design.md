@@ -51,6 +51,22 @@ Colours live under `colors:` in `design.yml`, as 6-digit hex without a leading `
 | `grey80` | `#3A3F4B` | Strong borders |
 | `accentSoft` | `#E8F0FE` | Soft accent tint (highlighted card fill) |
 
+### Raised surfaces and dark-background accent
+
+A card that sits *above* the page needs a tone separate from the page, and the
+two directions are not symmetric: on a light slide the card lifts towards white,
+on a dark slide it lifts away from black. Likewise, one accent rarely clears the
+contrast bar on both paper and ink.
+
+| Token | Default | Usage |
+| --- | --- | --- |
+| `paperSoft` | `#FFFFFF` | Raised card on a LIGHT slide |
+| `inkSoft` | `#1C2338` | Raised panel on a DARK slide |
+| `accentOnDark` | `#60A5FA` | The accent, retuned for DARK backgrounds |
+
+In this default palette the page is already pure white, so `paperSoft` matches
+`white`. A brand whose paper is off-white gives them different values.
+
 ### Colour principles
 
 - **`ink` + `accent` are the core pairing.** Use them for any hero, cover, or key

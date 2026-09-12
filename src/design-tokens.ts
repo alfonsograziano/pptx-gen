@@ -16,7 +16,10 @@ export type ColorName =
   | "grey10"
   | "grey30"
   | "grey80"
-  | "accentSoft";
+  | "accentSoft"
+  | "paperSoft"
+  | "inkSoft"
+  | "accentOnDark";
 
 export type FontRole = "sans" | "serif" | "mono";
 
@@ -50,7 +53,8 @@ export type FullDesign = Required<DesignPatch>;
 
 export const COLOR_NAMES: readonly ColorName[] = [
   "ink", "accent", "white", "accent2", "accent3",
-  "surface", "muted", "faint", "grey10", "grey30", "grey80", "accentSoft"
+  "surface", "muted", "faint", "grey10", "grey30", "grey80", "accentSoft",
+  "paperSoft", "inkSoft", "accentOnDark"
 ];
 
 export const FONT_ROLES: readonly FontRole[] = ["sans", "serif", "mono"];

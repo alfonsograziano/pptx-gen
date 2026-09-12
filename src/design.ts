@@ -41,7 +41,21 @@ export const C: Record<ColorName, string> = {
   grey80: "3A3F4B",
 
   // Soft accent tint (e.g. a highlighted card fill).
-  accentSoft: "E8F0FE"
+  accentSoft: "E8F0FE",
+
+  // Raised surfaces. A card that should sit *above* the page needs a tone
+  // separate from the page itself, and the two directions are not symmetric:
+  // on light the card lifts towards white, on dark it lifts away from black.
+  // In this default palette the page is already pure white, so `paperSoft`
+  // matches `white`; a brand whose paper is off-white gives them different
+  // values.
+  paperSoft: "FFFFFF", // raised card on a LIGHT slide
+  inkSoft: "1C2338", // raised panel on a DARK slide
+
+  // The accent, retuned for dark backgrounds. One accent cannot clear the
+  // contrast bar on both paper and ink, so brands that use dark slides set
+  // this to a lighter cut of the same hue.
+  accentOnDark: "60A5FA"
 };
 
 // Typography. `sans` is the default for everything; `serif` is reserved for

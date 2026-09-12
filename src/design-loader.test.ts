@@ -54,6 +54,17 @@ test("a bad hex colour names the offending key", () => {
   );
 });
 
+test("the raised-surface and on-dark tokens round-trip", () => {
+  // A brand with off-white paper needs a card tone distinct from the page, and
+  // an accent that clears contrast on dark. Without these the palette forces
+  // one accent to work on both grounds.
+  const patch = parseDesignFile(
+    ["colors:", "  paperSoft: FFFFFF", "  inkSoft: 1F1F1F", "  accentOnDark: EF4A3F"].join("\n"),
+    DESIGN
+  );
+  assert.deepEqual(patch.colors, { paperSoft: "FFFFFF", inkSoft: "1F1F1F", accentOnDark: "EF4A3F" });
+});
+
 test("an unknown colour key lists the valid ones", () => {
   assert.throws(
     () => parseDesignFile("colors:\n  primary: 3B82F6\n", DESIGN),
