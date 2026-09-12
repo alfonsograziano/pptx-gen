@@ -11,7 +11,7 @@ import { flattenSlideNumberFields, getSlideEntries } from "./ooxml.js";
 import type { BuildWarning, SlideOverride } from "./types.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TEMPLATES = path.resolve(HERE, "..", "templates");
+const TEMPLATES = path.resolve(HERE, "..", "starter", "templates");
 
 type SlideShape = "cover" | { custom: string } | { template: string; overrides?: SlideOverride[] };
 
