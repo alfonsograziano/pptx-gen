@@ -26,6 +26,7 @@ only when a genuinely suitable template exists.
 - Icon library: `assets/icons/`
 - Design system: `design.md` (and its code source `src/design.ts`)
 - Custom slide instructions: `custom-template-instructions.md`
+- Figure instructions: `figure-instructions.md`
 - Generated decks: `projects/<deck-id>/`
 
 ## Read the design system first
@@ -46,9 +47,55 @@ node --version
 ### 1. Read the brief
 
 Extract: audience and objective, context, the narrative arc, must-have slides,
-claims and numbers and their sources, assets or images that must appear, and the
-output name. If the brief is thin, make conservative choices and leave clear
-TODOs in `brief.md`. Do not invent facts or inflate numbers.
+claims and numbers and their sources, the visuals the deck needs, assets or
+images that must appear, and the output name. If the brief is thin, make
+conservative choices and leave clear TODOs in `brief.md`. Do not invent facts or
+inflate numbers.
+
+### 1a. Plan the visuals
+
+Before choosing templates or writing any code, decide what each slide *shows*,
+and write a `## Visuals` section into `brief.md`. One line per visual: the slide
+it belongs to, what it shows, and which of three routes it takes.
+
+```markdown
+## Visuals
+
+- Slide 3 — Target architecture → native (boxes and arrows, `custom.ts`)
+- Slide 5 — The alerts console as the operator sees it → figure (UI mockup, 1000x560)
+- Slide 7 — Adoption by quarter → figure (bar chart, 1280x720)
+- Slide 9 — Team photo from the summit → placeholder (only the user has it)
+```
+
+The three routes, in order of preference:
+
+1. **Native shapes** — anything made of parts a viewer might move or recolor:
+   diagrams, flows, cards, timelines, icons, simple labelled charts. This covers
+   most visuals. See 4a.
+2. **Figure** — content with no parts: a product or app UI, a chart with a
+   continuous axis or many series, a rendered document or terminal. You author
+   the HTML and the engine renders it. See 4d.
+3. **Image placeholder** — real-world imagery only the user has: a photo, a real
+   product screenshot, a client logo. See 4b.
+
+A figure is something you can *draw*; a placeholder is something you must be
+*given*.
+
+If the brief also asks for variants of a slide (see 4c), plan the visual once for
+the concept and note which variants carry it — a figure is rendered once and can
+be placed in several variants.
+
+Rules for this step:
+
+- **Propose a figure wherever one genuinely strengthens the slide**, and say why
+  in one clause. A deck explaining a product is much better with the product in
+  it; a deck of claims and numbers is better with the numbers drawn.
+- **Respect the caps**: at most one figure per slide, figures on no more than one
+  slide in five, and never the slide's title or main message inside a figure.
+- **The user steers.** The `## Visuals` list is a proposal. Offer it before
+  building so they can approve, trim, or extend it — "no figures" is a perfectly
+  good answer, and it falls back to native shapes and placeholders. Do not let a
+  deck acquire pictures nobody asked for.
 
 ### 2. Inspect available templates
 
@@ -73,11 +120,14 @@ Prefer fewer strong slides over many weak ones.
 projects/<deck-id>/
   build.ts
   brief.md
+  figures/        # authored figure HTML, if the deck has any (see 4d)
   inputs/
   output/
 ```
 
-Keep all deck-specific files inside this folder.
+Keep all deck-specific files inside this folder. `figures/` is source and is
+kept; the engine writes the rendered PNGs, and a copy of each figure's HTML, to
+`output/figures/`.
 
 ### 4. Write `build.ts`
 
@@ -148,9 +198,10 @@ Rules:
 - **Build everything from native shapes, lines, text, and vector icons** so it
   stays editable and recolorable in PowerPoint and Google Slides. Use `addShape`
   / `addCard` / `addArrow` / `addConnector` / `addText`, and `addIcon` /
-  `addVectorIcon` for icons. Do not render diagrams or icons as images. Reserve
-  `addSvgDiagram` (embeds a non-editable image) for complex art that cannot be
-  expressed as shapes, and note it when you use it.
+  `addVectorIcon` for icons. Do not render diagrams or icons as images. Content
+  with no native form at all — an app screen, a chart, a rendered document — is a
+  figure instead (4d). Reserve `addSvgDiagram` (embeds a non-editable image) for
+  complex art that cannot be expressed as shapes, and note it when you use it.
 - Keep custom slide content deterministic and local.
 - **Never pass, compute, or hardcode a page number.** `helpers.addFooter(slide)`
   takes no number, and no slide function should accept a `pageNum`. The build
@@ -162,32 +213,33 @@ Rules:
 
 ### 4b. Image placeholders
 
-Images carry meaning that text cannot, and they pair well with text — a screenshot,
-a product photo, a logo, a chart the tool cannot draw. Whenever the content would
-genuinely be stronger with an image **that is not a diagram you can build from
-native shapes**, do not leave a blank gap and do not fake the picture. Drop a
-**placeholder**: a grey box with a centered italic caption saying exactly what the
-image should show, so the user can drop the real asset in later.
+For real-world imagery that only the user has — a team photo, a real product
+screenshot, a client logo — do not leave a blank gap and do not fake the picture.
+Drop a **placeholder**: a grey box with a centered italic caption saying exactly
+what the image should show, so the user can supply the real asset later.
+
+If you could draw the thing yourself, it is a figure (4d), not a placeholder.
 
 Use the helper on any custom slide:
 
 ```ts
 helpers.addImagePlaceholder(slide, {
   x: 5.2, y: 1.6, w: 4.0, h: 3.0,
-  caption: "Screenshot of the dashboard's alerts panel",
+  caption: "Photo of the team on stage at re:Invent 2024",
 });
 ```
 
-On a **cloned template** slide, use the `addSvg` override with a grey box SVG, or
-prefer a custom slide when the layout is image-led.
+On a **cloned template** slide there is no placeholder helper: use the
+`addFigure` override, which draws the captioned grey box itself when the figure
+cannot be rendered, or prefer a custom slide when the layout is image-led.
 
 Rules:
 
 - **Do not overuse it.** Reach for a placeholder only when an image clearly adds
   value; most slides need none. Never use it to pad a thin slide.
-- **Build diagrams, flows, icons, and charts natively instead** (see 4a) — a
-  placeholder is for real-world imagery the tool cannot draw, not for artwork you
-  could express as shapes.
+- **Build diagrams, flows, icons, and cards natively instead** (see 4a), and draw
+  app screens, charts, and rendered artifacts as figures (see 4d). A placeholder
+  is only for imagery the tool cannot produce at all.
 - **Write a specific caption.** "Photo of the team on stage at re:Invent 2024",
   not "image here". The caption is the brief for whoever supplies the asset.
 - **The user steers this.** If they ask for more or fewer images, or to turn
@@ -249,6 +301,64 @@ if a group's slides are not contiguous; treat it as a bug in `build.ts`.
 so a variant build numbers straight through its inflated deck, and the numbers
 renumber on their own once the losing variants are removed. Never pass or
 compute a page number to compensate for variants.
+### 4d. Figures (authored HTML, rendered at build)
+
+A **figure** is an HTML file you write, rendered by headless Chrome at build time
+and placed on the slide as a picture. It implements a line from the `## Visuals`
+list in `brief.md` (see 1a).
+
+Use it only for content that has no native form at all: product and app UI
+mockups, charts with a continuous axis or many series, rendered text artifacts
+(an email, a document, a terminal session), and complex illustrative art.
+
+A figure is **not editable in Google Slides**. That is the whole cost, and it is
+why the bar is high. Apply the parts test: name the five things a viewer would
+want to click and change. If you can name them, build it natively instead.
+Diagrams, icons, cards, and timelines are always native.
+
+**Read `figure-instructions.md` before writing any figure markup.** It defines
+the brand CSS variables the engine injects and the rules the HTML must follow.
+
+Put the HTML in `projects/<deck-id>/figures/`. On a custom slide:
+
+```ts
+const CONSOLE: Figure = {
+  id: "alerts-console",
+  htmlFile: "figures/alerts-console.html",
+  caption: "The alerts console, with the checkout latency alert firing",
+  viewport: { width: 1000, height: 560 },
+};
+
+await helpers.addFigure(slide, CONSOLE, { x: 5.15, y: 1.62, w: 4.3, h: 2.408 });
+```
+
+On a cloned template slide:
+
+```ts
+overrides: [
+  { op: "addFigure", id: "alerts-console", figure: CONSOLE, x: 5.15, y: 1.62, w: 4.3, h: 2.408 },
+]
+```
+
+To fill a picture box a template already has, use `replaceFigure` and read that
+field's `w` and `h` from `fields.yml` first, then choose a viewport with the same
+ratio so the figure lands exactly.
+
+Rules:
+
+- **One figure per slide, and figures on at most one slide in five.**
+- **Never put the slide's title or main message inside a figure.** That text must
+  be real text on the slide: searchable, translatable, readable by a screen
+  reader, and rendered with the deck's embedded fonts. A figure bakes in whatever
+  font the build machine had.
+- **Match the viewport's ratio to the slide box**, or pass `viewport: "box"`. A
+  mismatch is shrunk to fit and leaves a gap; the report says so.
+- **Write a real caption.** It is the text a reader sees in the figure's place
+  when it cannot be rendered.
+- A missing browser is not a build failure: the deck is produced with captioned
+  grey boxes and a warning. A missing `.html` file *is* a failure.
+- Run `npm run install-fonts` before building a deck with figures, or they render
+  in a substitute font and will visibly not match the slides.
 
 ### 5. Run and self-heal
 
@@ -265,10 +375,15 @@ rerun. Repeat until it succeeds or there is a real engine bug. Do not patch
 
 ### 6. Review output
 
-Inspect `output/deck.pptx`, `output/report.md`, and `output/screenshots/*.png`
-(present only if LibreOffice is installed). Warnings are allowed; report them.
-Invalid override targets, missing templates, missing required fields, invalid
-asset paths, and a corrupt PPTX are hard failures.
+Inspect `output/deck.pptx`, `output/report.md`, `output/screenshots/*.png`
+(present only if LibreOffice is installed), and `output/figures/` when the deck
+has figures. Warnings are allowed; report them. Invalid override targets, missing
+templates, missing required fields, invalid asset paths, a missing figure source
+file, and a corrupt PPTX are hard failures.
+
+Check the report's `## Figures` section. Any figure listed as `placeholder` did
+not render — say which ones and why in your final response, because the deck
+shipped a grey box where a picture was meant to be.
 
 The report's `## Slides` section lists every slide in deck order and groups any
 variants together with their screenshot filenames. If the deck has variant
@@ -278,8 +393,8 @@ user at those screenshots and ask which one they want.
 ## Override operations
 
 `delete`, `hide`, `move`, `resize`, `styleText`, `addText`, `addSvg`, `addIcon`,
-`replaceImage`. Use layout overrides sparingly; if a slide needs many, pick a
-different template.
+`addImage`, `addFigure`, `replaceImage`, `replaceFigure`. Use layout overrides
+sparingly; if a slide needs many, pick a different template.
 
 ```ts
 deck.addSlideFromTemplate({
@@ -298,8 +413,9 @@ deck.addSlideFromTemplate({
 ## Final response
 
 Return the absolute path to the final `.pptx`, the report, and the screenshots
-folder; any warnings or limitations; and any facts the user must review before
-using the deck externally.
+folder (plus `output/figures/` if the deck has figures); any warnings or
+limitations, including every figure that fell back to a placeholder and why; and
+any facts the user must review before using the deck externally.
 
 If the deck contains variants, list each group with its variants and their
 screenshot filenames, say what distinguishes each layout, and ask the user to

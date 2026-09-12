@@ -12,7 +12,11 @@ These decks are opened and edited in **Google Slides** as well as PowerPoint. Go
 - **Icons must be native, not images.** Use `helpers.addIcon(...)` (icon library) or `helpers.addVectorIcon(slide, svg, box, { color })` (inline SVG). Both convert the vector to a native custom-geometry shape, so the icon can be recolored in Slides by changing its line colour. Do **not** place icons as PNG/SVG images.
 - **Do not embed what can be a shape.** `helpers.addSvgDiagram(...)` embeds the SVG as an image (Google Slides shows a broken-image placeholder for embedded SVG, so it is not reliably editable anywhere). Reserve it for genuinely complex vector art (gradients, photos, intricate illustrations) that cannot be expressed as shapes. A box-and-arrow architecture diagram is **not** one of these: build it natively.
 
-When in doubt, ask: "If I open this in Google Slides, can I move and recolor each part?" If the answer is no, rebuild it from native shapes.
+- **A figure is the one deliberate exception, and it is narrow.** Some content has no native form at all: an app screen, a chart, a rendered document, an illustration. For those, author an HTML file and let the engine rasterize it — see `figure-instructions.md`. This is not a loophole for diagrams, icons, cards, or timelines, all of which have native forms and keep them.
+
+When in doubt, ask: "If I open this in Google Slides, can I move and recolor each part?" If the answer is no, rebuild it from native shapes — **unless there are no parts.**
+
+**The parts test.** Name the five things a viewer would want to click and change. If you can name them — a box, an arrow, a label, a table row — build it natively. If the honest answer is "nothing; it is one picture of a thing", it is a figure.
 
 ## Required workflow
 
@@ -645,7 +649,74 @@ export function svgLoopSlide(input: {
 }
 ```
 
-## Example 9: code panel
+## Example 9: HTML figure beside native text (NOT editable in Google Slides)
+
+For content with no native form at all — a product UI, a chart with a continuous
+axis, a rendered document — author an HTML file and let the engine render it.
+Read `figure-instructions.md` before writing the markup: it lists the brand CSS
+variables the engine injects and the rules the HTML must follow.
+
+The figure carries the *picture*; the slide carries the *words*. Never put the
+title or the takeaway inside the figure — a figure bakes in the build machine's
+fonts and its text is unsearchable.
+
+Put the HTML in `projects/<deck-id>/figures/alerts-console.html`, then:
+
+```ts
+import { CustomSlide, type Figure } from "../../src/index.js";
+
+const FIGURE_BOX = { x: 5.15, y: 1.62, w: 4.3, h: 2.408 };
+
+const CONSOLE_MOCKUP: Figure = {
+  id: "alerts-console",
+  htmlFile: "figures/alerts-console.html",
+  caption: "The alerts console, with the checkout latency alert firing",
+  // 1000 x 560 is the same 1.79:1 shape as FIGURE_BOX, so the figure fills it
+  // exactly instead of being shrunk to fit.
+  viewport: { width: 1000, height: 560 },
+};
+
+export function operatorViewSlide(pageNum = 1): CustomSlide {
+  return new CustomSlide({
+    name: "operator-view",
+    draw: async ({ slide, helpers, design }) => {
+      const { colors } = design;
+
+      helpers.addHeader(slide, "What the operator sees");
+      helpers.addTextBlock(slide, [{ text: "One screen, three states" }],
+        { x: 0.75, y: 1.2, w: 4.1, h: 0.5 }, { fontSize: 20, color: colors.ink });
+      helpers.addTextBlock(slide,
+        [{ text: "Every incident lands in one queue, so the on-call engineer never has to decide where to look first." }],
+        { x: 0.75, y: 1.95, w: 4.0, h: 0.8 }, { fontSize: 11, color: colors.muted });
+
+      // Draws the captioned placeholder instead if no browser is installed, so
+      // the slide still makes its point.
+      await helpers.addFigure(slide, CONSOLE_MOCKUP, FIGURE_BOX);
+
+      // A caption that says something the figure does not, rather than repeating
+      // its caption — that one is the stand-in text when it cannot render.
+      helpers.addTextBlock(slide, [{ text: "Incident queue \u00b7 3 open, 1 firing" }],
+        { x: FIGURE_BOX.x, y: FIGURE_BOX.y + FIGURE_BOX.h + 0.12, w: FIGURE_BOX.w, h: 0.4 },
+        { fontSize: 9, color: colors.muted, italic: true });
+
+      helpers.addFooter(slide, pageNum);
+    }
+  });
+}
+```
+
+Rules:
+
+- **One figure per slide**, on no more than one slide in five.
+- A mocked app screen qualifies because it has no parts anyone would click and
+  recolor. A box-and-arrow diagram does not — build that natively (Example 7).
+- Match the viewport's ratio to the box, or pass `viewport: "box"`.
+- Keep the smallest text in the figure at 18px or more at a 1280px viewport; the
+  figure is reduced roughly 3.5x on the slide.
+
+A complete worked deck is in `examples/figure-mockup/`.
+
+## Example 10: code panel
 
 Use this for API snippets, scorer examples, JSON contracts, or configuration.
 
@@ -708,7 +779,7 @@ export function codePanelSlide(input: {
 }
 ```
 
-## Example 10: exercise slide
+## Example 11: exercise slide
 
 Use this for workshops and interactive sessions.
 
@@ -798,8 +869,8 @@ export function exerciseSlide(input: {
 
 ## Diagram guidance
 
-- Build diagrams from native shapes, lines, and text so they stay editable in Google Slides. Do not render a diagram as one SVG/PNG image.
-- For real-world imagery the tool cannot draw (a photo, screenshot, logo, or chart), do not fake it: drop `helpers.addImagePlaceholder(slide, { x, y, w, h, caption })` — a grey box with a centered italic caption describing what belongs there — so the user can supply the asset later. Use it sparingly and write a specific caption; build anything that can be a shape natively instead.
+- Build diagrams from native shapes, lines, and text so they stay editable in Google Slides. Do not render a diagram as one SVG/PNG image, and never as a figure — a diagram is all parts.
+- For content you can draw but not with shapes — an app screen, a chart, a rendered document — author an HTML **figure** (`figure-instructions.md`). For real-world imagery only the user has (a photo, a real product screenshot, a client logo), do not fake it: drop `helpers.addImagePlaceholder(slide, { x, y, w, h, caption })` — a grey box with a centered italic caption describing what belongs there — so they can supply the asset later. Write a specific caption either way. The difference: a figure is something you can *draw*; a placeholder is something you must be *given*.
 - Use `addVectorIcon` / `addIcon` for icons (native custom geometry), never icons-as-images.
 - Use boxes for systems, services, actors, or steps.
 - Use arrows for data flow, control flow, or sequence.
@@ -817,7 +888,8 @@ export function exerciseSlide(input: {
 - Text is legible at presentation size.
 - Nothing overlaps the footer.
 - Arrows touch the right visual targets.
-- **Every part is a native shape, line, text, or vector icon, so it is editable and recolorable in Google Slides.** No diagrams or icons embedded as images, unless it is complex art that cannot be a shape (then it is a deliberate, noted exception).
+- **Every part is a native shape, line, text, or vector icon, so it is editable and recolorable in Google Slides.** The only exceptions are deliberate and noted: a figure (content with no parts — a UI mockup, a chart, a rendered artifact) or `addSvgDiagram` for complex vector art. Diagrams, icons, cards, and timelines are never exceptions.
+- At most one figure per slide, and no figure carries the slide's title or its main message.
 - Icons use `addIcon` / `addVectorIcon` (native), not image placement.
 - No random values, current dates, or network calls are used.
 - If the slide is one of several variants, it is a genuinely different layout — not the same layout restyled — and its text is written to suit that layout.

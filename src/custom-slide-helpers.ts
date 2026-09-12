@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { C, FONTS, LAYOUT, LOGO_FILES } from "./design.js";
+import { fitBox, type Figure, type FigureFit, type FigureRenderer } from "./figure.js";
 import { PAGE_NUMBER_SHAPE_NAME } from "./ooxml.js";
 import { parseSvg, svgToGeomPoints } from "./svg-path.js";
 
@@ -43,8 +44,10 @@ export function createCustomSlideHelpers(options: {
   projectDir: string;
   assetsDir: string;
   shapeType: ShapeType;
+  /** Shared across the build. Without it, `addFigure` draws a placeholder. */
+  figures?: FigureRenderer;
 }) {
-  const { projectDir, assetsDir, shapeType } = options;
+  const { projectDir, assetsDir, shapeType, figures } = options;
 
   return {
     addHeader(slide: Slide, text: string, opts: { light?: boolean } = {}) {
@@ -201,6 +204,25 @@ export function createCustomSlideHelpers(options: {
         valign: "middle",
         margin: 0
       });
+    },
+
+    // Renders an authored HTML figure and places it in `box`, preserving its
+    // proportions. Reserve it for content that cannot be built from native
+    // shapes — a UI mockup, a chart, a rendered document — because unlike every
+    // other helper here the result is a picture, not editable parts.
+    //
+    // If the figure cannot be rendered (no browser installed, for instance) the
+    // captioned placeholder is drawn instead, so the deck still builds and the
+    // slide still says what belongs there. Returns the box actually used.
+    async addFigure(slide: Slide, figure: Figure, box: Box, opts: { fit?: FigureFit } = {}): Promise<Box> {
+      const result = await figures?.render(figure, { box: { w: box.w, h: box.h } });
+      if (!result || result.status === "failed") {
+        this.addImagePlaceholder(slide, { ...box, caption: figure.caption });
+        return box;
+      }
+      const placed = fitBox(box, result.pxWidth, result.pxHeight, opts.fit ?? "contain");
+      slide.addImage({ path: result.pngPath, ...placed, altText: figure.caption });
+      return placed;
     },
 
     addArrow(slide: Slide, opts: {

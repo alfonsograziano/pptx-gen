@@ -71,6 +71,10 @@ slides where none does.
 - **LibreOffice (optional).** Only used to render screenshots for review. If it
   is not installed, screenshots are skipped and the deck is still built. Install
   it from [libreoffice.org](https://www.libreoffice.org) to enable them.
+- **Google Chrome (optional).** Only needed by decks that use [figures](#figures).
+  Without it, each figure becomes a captioned grey placeholder and the deck is
+  still built. Chromium, Edge, and Brave work too; `CHROME_PATH` names a specific
+  binary.
 
 ## Install
 
@@ -206,9 +210,8 @@ deck.addSlideFromTemplate({
 ```
 
 Available operations: `delete`, `hide`, `move`, `resize`, `styleText`,
-`addText`, `addSvg`, `addIcon`, `replaceImage`. Targets are field ids, shape ids,
-or shape names. Use overrides sparingly; if a slide needs many, pick a different
-template or build a custom slide.
+`addText`, `addSvg`, `addIcon`, `addImage`, `addFigure`, `replaceImage`,
+`replaceFigure`.
 
 ### Slides from scratch (custom slides)
 
@@ -293,6 +296,36 @@ optionally `npm run install-fonts`.
 `assets/icons/` holds the Lucide set. Reference an icon by file name in an
 `addIcon` override or `helpers.addIcon(...)`. Icons are emitted as native
 custom-geometry shapes, so they recolor and edit like any other shape.
+
+### Figures
+
+Some things cannot be drawn with shapes: a product UI mockup, a chart with a
+continuous axis, a rendered document. For those, write an HTML file — a
+**figure** — and the engine renders it with headless Chrome at build time and
+places the PNG on the slide, on custom and cloned slides alike.
+
+```ts
+await helpers.addFigure(slide, {
+  id: "alerts-console",
+  htmlFile: "figures/alerts-console.html",
+  caption: "The alerts console, with the checkout latency alert firing",
+  viewport: { width: 1000, height: 560 }
+}, { x: 5.15, y: 1.62, w: 4.3, h: 2.408 });
+```
+
+The design tokens are injected as CSS custom properties (`var(--ink)`,
+`var(--accent)`, `var(--font-sans)`), so a figure is on-brand by construction and
+follows a rebrand.
+
+The cost is that a figure is a picture: unlike everything else the engine emits,
+it cannot be edited in Google Slides. So the rule is narrow — a figure is for
+content with *no parts*. Anything a viewer might want to move or recolor —
+diagrams, icons, cards, timelines — stays native. See
+[`figure-instructions.md`](figure-instructions.md) for the full contract, and
+`examples/figure-mockup/` for a worked example.
+
+Without a browser installed the deck still builds, with a captioned grey box in
+each figure's place and a warning in the report.
 
 ---
 

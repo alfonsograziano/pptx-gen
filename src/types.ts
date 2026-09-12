@@ -1,3 +1,5 @@
+import type { Figure, FigureFit } from "./figure.js";
+
 export type PrimitiveRichText = string | MarkdownText;
 
 export type MarkdownText = {
@@ -62,7 +64,10 @@ export type SlideOverride =
   | { op: "addText"; id: string; text: PrimitiveRichText; x: number; y: number; w: number; h: number; style?: TextStyle }
   | { op: "addSvg"; id: string; path: string; x: number; y: number; w: number; h: number }
   | { op: "addIcon"; id: string; icon: string; x: number; y: number; w: number; h: number; color?: string }
-  | { op: "replaceImage"; target: string; path: string };
+  | { op: "replaceImage"; target: string; path: string }
+  | { op: "addImage"; id: string; path: string; x: number; y: number; w: number; h: number }
+  | { op: "addFigure"; id: string; figure: Figure; x: number; y: number; w: number; h: number; fit?: FigureFit }
+  | { op: "replaceFigure"; target: string; figure: Figure; fit?: FigureFit };
 
 export type TextStyle = {
   fontFace?: string;
@@ -100,8 +105,22 @@ export type RenderOptions = {
   output: string;
   report?: string;
   screenshots?: string;
+  /** Where figure HTML and PNGs are written. Defaults to `figures/` beside the output. */
+  figures?: string;
   /** Show live, timed build progress in the terminal. Defaults to true. */
   progress?: boolean;
+};
+
+/** What became of one figure in a build. */
+export type FigureRecord = {
+  id: string;
+  /** `placeholder` means it could not be rendered and a captioned box was drawn. */
+  status: "rendered" | "cached" | "placeholder";
+  htmlPath: string;
+  pngPath?: string;
+  pxWidth?: number;
+  pxHeight?: number;
+  reason?: string;
 };
 
 export type BuildWarning = {
@@ -135,4 +154,5 @@ export type BuildReport = {
   slidesBuilt: number;
   warnings: BuildWarning[];
   screenshots: string[];
+  figures: FigureRecord[];
 };

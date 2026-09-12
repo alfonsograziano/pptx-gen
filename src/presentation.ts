@@ -9,6 +9,8 @@ import { loadTemplate } from "./templates.js";
 import { ensureDir, writeTextFile } from "./fs.js";
 import { renderScreenshots } from "./render.js";
 import { CustomSlide, makeCustomSlideTempPath, renderCustomSlideToPptx, renderCustomSlidesToPptx } from "./custom-slide.js";
+import { FigureRenderer } from "./figure.js";
+import type { ShotFn } from "./html-shot.js";
 import { BuildProgress, dimKind } from "./progress.js";
 
 // A no-op reporter used when progress output is disabled, so the render path
@@ -25,6 +27,8 @@ export type PresentationOptions = {
   projectDir?: string;
   /** Folder holding icons and logo assets. Defaults to `<templateLibrary>/../assets`. */
   assetsDir?: string;
+  /** Rasterizer override for figures. Injected by tests so they need no browser. */
+  shot?: ShotFn;
 };
 
 export class Presentation {
@@ -33,12 +37,14 @@ export class Presentation {
   private readonly projectDir: string;
   private readonly title?: string;
   private readonly assetsDir: string;
+  private readonly shot?: ShotFn;
 
   constructor(options: PresentationOptions = {}) {
     this.title = options.title;
     this.templateRoot = path.resolve(options.templateLibrary ?? "templates");
     this.projectDir = path.resolve(options.projectDir ?? process.cwd());
     this.assetsDir = path.resolve(options.assetsDir ?? path.resolve(this.templateRoot, "..", "assets"));
+    this.shot = options.shot;
   }
 
   addSlideFromTemplate(options: AddSlideOptions): this {
@@ -69,6 +75,10 @@ export class Presentation {
       ? SILENT_PROGRESS
       : new BuildProgress(this.title ?? "Building deck", expectedSteps);
 
+    // One renderer for the whole build, so a figure used on several slides is
+    // rasterized once and a missing browser is reported once.
+    const figures = this.makeFigureRenderer(output, options, warnings, progress);
+
     const firstTemplate = await loadTemplate(this.templateRoot, firstTemplateSlide.options.templateName);
     const pkg = await PptxPackage.load(firstTemplate.pptxPath);
     // The base package doubles as the source for slides reusing the first
@@ -98,7 +108,8 @@ export class Presentation {
             pageNum: index + 1,
             projectDir: this.projectDir,
             assetsDir: this.assetsDir,
-            title: this.title
+            title: this.title,
+            figures
           });
 
           const srcPkg = await PptxPackage.load(tempPptx);
@@ -155,12 +166,18 @@ export class Presentation {
 
         await fillSlideText(pkg, clonedSlideNumber, template.fieldsFile.fields, variables, warnings);
         await convertTemplatePageNumber(pkg, clonedSlideNumber, template.fieldsFile.fields);
-        await applyOverrides(pkg, clonedSlideNumber, template.fieldsFile.fields, requestedSlide.options.overrides ?? [], this.projectDir, warnings);
+        await applyOverrides(pkg, clonedSlideNumber, template.fieldsFile.fields, requestedSlide.options.overrides ?? [], {
+          rootDir: this.projectDir,
+          warnings,
+          figures
+        });
       });
     }
 
     await progress.step(`Validating fonts ${dimKind([...requiredFonts].join(", ") || "none")}`, () => validateFonts(pkg, [...requiredFonts], warnings));
     await progress.step("Assembling and saving deck", async () => {
+      // Only now is the set of figures this build used complete.
+      await figures.prune();
       await keepOnlySlides(pkg, clonedSlides);
       // Numbering can only be settled once the slides are in their final order.
       await applySlideNumbering(pkg, warnings);
@@ -185,7 +202,8 @@ export class Presentation {
       slides: listing,
       slidesBuilt: this.slides.length,
       warnings,
-      screenshots
+      screenshots,
+      figures: figures.results()
     };
 
     if (options.report) {
@@ -225,12 +243,30 @@ export class Presentation {
     }
   }
 
+  private makeFigureRenderer(
+    output: string,
+    options: RenderOptions,
+    warnings: BuildWarning[],
+    progress: { note: (message: string) => void }
+  ): FigureRenderer {
+    return new FigureRenderer({
+      outputDir: options.figures
+        ? path.resolve(this.projectDir, options.figures)
+        : path.join(path.dirname(output), "figures"),
+      projectDir: this.projectDir,
+      warnings,
+      note: (message) => progress.note(message),
+      shot: this.shot
+    });
+  }
+
   private async renderAllCustom(
     output: string,
     options: RenderOptions,
     warnings: BuildWarning[],
     listing: BuildReportSlide[]
   ): Promise<BuildReport> {
+
     const customSlides = this.slides.map((slide) => {
       if (slide.kind !== "custom") throw new Error("Unexpected non-custom slide in all-custom render path.");
       return slide.slide;
@@ -242,14 +278,18 @@ export class Presentation {
       ? SILENT_PROGRESS
       : new BuildProgress(this.title ?? "Building deck", expectedSteps);
 
+    const figures = this.makeFigureRenderer(output, options, warnings, progress);
+
     await progress.step(`Rendering ${customSlides.length} custom slide(s) and saving deck`, async () => {
       await renderCustomSlidesToPptx({
         customSlides,
         output,
         projectDir: this.projectDir,
         assetsDir: this.assetsDir,
-        title: this.title
+        title: this.title,
+        figures
       });
+      await figures.prune();
 
       // pptxgenjs writes the file directly, so the page-number text boxes become
       // live fields in a second pass over the saved package.
@@ -287,7 +327,8 @@ export class Presentation {
       slides: listing,
       slidesBuilt: customSlides.length,
       warnings,
-      screenshots
+      screenshots,
+      figures: figures.results()
     };
 
     if (options.report) {
@@ -412,8 +453,22 @@ function formatReport(report: BuildReport): string {
 
 ${formatSlidesSection(report)}
 
+## Figures
+
+${formatFigures(report.figures)}
+
 ## Warnings
 
 ${report.warnings.length ? report.warnings.map((warning) => `- ${warning.code}: ${warning.message}`).join("\n") : "- None"}
 `;
+}
+
+function formatFigures(figures: BuildReport["figures"]): string {
+  if (figures.length === 0) return "- None";
+  return figures.map((figure) => {
+    const detail = figure.status === "placeholder"
+      ? `placeholder (${figure.reason ?? "not rendered"})`
+      : `${figure.status}, ${figure.pxWidth}x${figure.pxHeight}`;
+    return `- ${figure.id}: ${detail} — ${figure.htmlPath}`;
+  }).join("\n");
 }

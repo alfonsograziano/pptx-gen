@@ -1,7 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PptxPackage } from "./pptx-package.js";
+import { fitBox, type Box, type Figure, type FigureBox, type FigureFit, type FigureRenderer } from "./figure.js";
 import type { BuildWarning, SlideOverride, TemplateField, TextStyle } from "./types.js";
 import { richTextToPlain } from "./rich-text.js";
 import { asArray, buildXml, escapeXml, parseXml, unescapeXml } from "./xml.js";
@@ -163,12 +164,26 @@ export async function appendSlideFromPackage(
       if (String(rel["@_TargetMode"]) === "External") continue;
       const target = String(rel["@_Target"] ?? "");
       const resolved = path.posix.normalize(path.posix.join("ppt/slides", target));
-      if (targetPkg.has(resolved)) continue;
       if (resolved.includes("/media/") && srcPkg.has(resolved)) {
-        targetPkg.setBytes(resolved, await srcPkg.bytes(resolved));
-        const ext = path.posix.extname(resolved).slice(1).toLowerCase();
+        // Every source package numbers its own media from `image1`, so two
+        // independently rendered slides routinely both carry `ppt/media/image1.png`
+        // with DIFFERENT bytes. Skipping the copy because the name is taken would
+        // silently point this slide at the other slide's picture, so a clashing
+        // name gets a fresh one and the relationship is repointed at it.
+        const bytes = await srcPkg.bytes(resolved);
+        let mediaPath = resolved;
+        if (targetPkg.has(resolved) && !bytes.equals(await targetPkg.bytes(resolved))) {
+          const ext = path.posix.extname(resolved);
+          const next = nextNumber(targetPkg.files("ppt/media/"), /image(\d+)\./);
+          mediaPath = `ppt/media/image${next}${ext}`;
+          rel["@_Target"] = path.posix.relative("ppt/slides", mediaPath);
+        }
+        if (!targetPkg.has(mediaPath)) targetPkg.setBytes(mediaPath, bytes);
+        const ext = path.posix.extname(mediaPath).slice(1).toLowerCase();
         if (ext) await addDefaultContentType(targetPkg, ext, mediaContentType(ext));
-      } else if (!targetPkg.has(resolved)) {
+      } else if (targetPkg.has(resolved)) {
+        continue;
+      } else {
         warnings.push({
           code: "missing-slide-dependency",
           message: `Slide depends on '${resolved}' which is not present in the deck. The slide may not render correctly.`,
@@ -432,14 +447,22 @@ export async function fillSlideText(
   pkg.setText(`ppt/slides/slide${slideNumber}.xml`, slideXml);
 }
 
+export type OverrideContext = {
+  /** Deck project directory; asset paths resolve against it. */
+  rootDir: string;
+  warnings: BuildWarning[];
+  /** Shared across the build. Without it, figure overrides fall back. */
+  figures?: FigureRenderer;
+};
+
 export async function applyOverrides(
   pkg: PptxPackage,
   slideNumber: number,
   fields: TemplateField[],
   overrides: SlideOverride[],
-  rootDir: string,
-  warnings: BuildWarning[]
+  ctx: OverrideContext
 ): Promise<void> {
+  const { rootDir, warnings } = ctx;
   let slideXml = await pkg.text(`ppt/slides/slide${slideNumber}.xml`);
 
   for (const override of overrides) {
@@ -463,20 +486,49 @@ export async function applyOverrides(
       slideXml = insertShape(slideXml, createTextShape(override.id, richTextToPlain(override.text), override.x, override.y, override.w, override.h, override.style));
     } else if (override.op === "addSvg" || override.op === "addIcon") {
       const sourcePath = path.resolve(rootDir, override.op === "addSvg" ? override.path : override.icon);
-      const svg = await readFile(sourcePath, "utf8");
-      const mediaName = `ppt/media/${safeId(override.id)}-${Date.now()}.svg`;
-      pkg.setBytes(mediaName, svg);
-      await addDefaultContentType(pkg, "svg", "image/svg+xml");
-      const relId = await addSlideRelationship(pkg, slideNumber, IMAGE_REL_TYPE, `../media/${path.basename(mediaName)}`);
+      const relId = await embedImagePart(pkg, slideNumber, await readFile(sourcePath), extensionOf(sourcePath, "svg"));
       slideXml = insertShape(slideXml, createPictureShape(override.id, relId, override.x, override.y, override.w, override.h));
+    } else if (override.op === "addImage") {
+      const sourcePath = path.resolve(rootDir, override.path);
+      const relId = await embedImagePart(pkg, slideNumber, await readFile(sourcePath), extensionOf(sourcePath, "png"));
+      slideXml = insertShape(slideXml, createPictureShape(override.id, relId, override.x, override.y, override.w, override.h));
+    } else if (override.op === "addFigure") {
+      const box: Box = { x: override.x, y: override.y, w: override.w, h: override.h };
+      const rendered = await renderFigure(ctx, override.figure, { w: box.w, h: box.h });
+      if (!rendered) {
+        // Nothing else occupies this spot, so say what belongs here.
+        slideXml = insertShape(slideXml, createPlaceholderShape(override.id, override.figure.caption, box));
+      } else {
+        const relId = await embedImagePart(pkg, slideNumber, await readFile(rendered.pngPath), "png");
+        const placed = fitBox(box, rendered.pxWidth, rendered.pxHeight, override.fit ?? "contain");
+        slideXml = insertShape(slideXml, createPictureShape(override.id, relId, placed.x, placed.y, placed.w, placed.h));
+      }
+    } else if (override.op === "replaceFigure") {
+      const target = findTargetShape(slideXml, override.target, fields);
+      const geometry = target ? getGeometry(target) : undefined;
+      // The picture box the figure is replacing: matching its shape means the
+      // figure lands exactly, with no letterboxing and nothing to re-inscribe.
+      const box = geometry?.w && geometry.h ? { w: geometry.w, h: geometry.h } : undefined;
+      const rendered = await renderFigure(ctx, override.figure, box);
+      if (!rendered) {
+        // Unlike addFigure there is already a picture in this box, and the
+        // template's own image is a better stand-in than a grey placeholder.
+        warnings.push({
+          code: "figure-placeholder-used",
+          message: `Figure '${override.figure.id}' could not be rendered, so '${override.target}' keeps the template's original image.`,
+          slide: slideNumber,
+          target: override.target
+        });
+      } else {
+        const relId = await embedImagePart(pkg, slideNumber, await readFile(rendered.pngPath), "png");
+        const aspect = rendered.pxWidth / rendered.pxHeight;
+        slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) => (
+          swapPicture(shapeXml, relId, aspect, override.fit ?? "contain", override.target, slideNumber)
+        ));
+      }
     } else if (override.op === "replaceImage") {
       const sourcePath = path.resolve(rootDir, override.path);
-      const data = await readFile(sourcePath);
-      const ext = (path.extname(sourcePath).slice(1) || "png").toLowerCase();
-      const mediaName = `${safeId(override.target)}-${slideNumber}-${nextRuntimeMediaId()}.${ext}`;
-      pkg.setBytes(`ppt/media/${mediaName}`, data);
-      await addDefaultContentType(pkg, ext, mediaContentType(ext));
-      const relId = await addSlideRelationship(pkg, slideNumber, IMAGE_REL_TYPE, `../media/${mediaName}`);
+      const relId = await embedImagePart(pkg, slideNumber, await readFile(sourcePath), extensionOf(sourcePath, "png"));
       slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) => {
         if (!/<a:blip\b[^>]*\br:embed="/.test(shapeXml)) {
           throw new Error(`replaceImage target '${override.target}' on slide ${slideNumber} is not an image (no <a:blip>).`);
@@ -763,6 +815,109 @@ function setOrReplaceAttr(tagStart: string, attr: string, value: string): string
 
 function insertShape(slideXml: string, shapeXml: string): string {
   return slideXml.replace("</p:spTree>", `${shapeXml}</p:spTree>`);
+}
+
+/** The first shape matching `target`, or undefined when nothing matches. */
+function findTargetShape(slideXml: string, target: string, fields: TemplateField[]): string | undefined {
+  return (slideXml.match(/<p:(?:sp|pic)>[\s\S]*?<\/p:(?:sp|pic)>/g) ?? [])
+    .find((shapeXml) => shapeMatchesTarget(shapeXml, target, fields));
+}
+
+/**
+ * Render a figure for an override, or undefined if it could not be rendered.
+ *
+ * A missing browser is an environment problem and must not fail a build, so the
+ * caller falls back instead. `FigureRenderer` has already recorded the warning.
+ */
+async function renderFigure(
+  ctx: OverrideContext,
+  figure: Figure,
+  box?: FigureBox
+): Promise<{ pngPath: string; pxWidth: number; pxHeight: number } | undefined> {
+  if (!ctx.figures) return undefined;
+  const result = await ctx.figures.render(figure, { box });
+  return result.status === "failed" ? undefined : result;
+}
+
+/**
+ * Write image bytes into the package and return a relationship id for them.
+ *
+ * The part is named after a hash of its content, which makes the output
+ * byte-stable across rebuilds and means the same picture used on several slides
+ * is stored once.
+ */
+async function embedImagePart(
+  pkg: PptxPackage,
+  slideNumber: number,
+  bytes: Buffer,
+  extension: string
+): Promise<string> {
+  const ext = extension.toLowerCase();
+  const mediaName = `img-${createHash("sha1").update(bytes).digest("hex").slice(0, 10)}.${ext}`;
+  const partPath = `ppt/media/${mediaName}`;
+  if (!pkg.has(partPath)) pkg.setBytes(partPath, bytes);
+  await addDefaultContentType(pkg, ext, mediaContentType(ext));
+  return addSlideRelationship(pkg, slideNumber, IMAGE_REL_TYPE, `../media/${mediaName}`);
+}
+
+function extensionOf(filePath: string, fallback: string): string {
+  return (path.extname(filePath).slice(1) || fallback).toLowerCase();
+}
+
+/**
+ * Point an existing picture at new image bytes.
+ *
+ * Two things beyond the blip swap matter for correctness. A crop the template
+ * author applied in PowerPoint lives in `<a:srcRect>` and would otherwise be
+ * applied to the new image, cropping something it was never measured for. And
+ * because the fill stretches, a picture whose proportions differ from the box
+ * would be squashed, so the box is re-inscribed around the new aspect ratio.
+ */
+function swapPicture(
+  shapeXml: string,
+  relId: string,
+  aspect: number,
+  fit: FigureFit,
+  target: string,
+  slideNumber: number
+): string {
+  if (!/<a:blip\b[^>]*\br:embed="/.test(shapeXml)) {
+    throw new Error(`replaceFigure target '${target}' on slide ${slideNumber} is not an image (no <a:blip>).`);
+  }
+  let next = shapeXml
+    .replace(/(<a:blip\b[^>]*\br:embed=")[^"]*(")/, `$1${relId}$2`)
+    .replace(/<a:srcRect\b[^>]*\/>/g, "");
+
+  if (fit !== "contain") return next;
+  const geometry = getGeometry(next);
+  if (!geometry.x || !geometry.y || !geometry.w || !geometry.h) return next;
+  const placed = fitBox({ x: geometry.x, y: geometry.y, w: geometry.w, h: geometry.h }, aspect, 1, "contain");
+
+  // Confine the rewrite to <p:spPr>: in a <p:pic> the <p:blipFill> comes first
+  // and can carry offsets of its own that must not be touched.
+  return next.replace(/<p:spPr>[\s\S]*?<\/p:spPr>/, (spPr) => spPr
+    .replace(/<a:off x="[^"]+" y="[^"]+"\/>/, `<a:off x="${inToEmu(placed.x)}" y="${inToEmu(placed.y)}"/>`)
+    .replace(/<a:ext cx="[^"]+" cy="[^"]+"\/>/, `<a:ext cx="${inToEmu(placed.w)}" cy="${inToEmu(placed.h)}"/>`));
+}
+
+/**
+ * A captioned stand-in for a figure that could not be rendered.
+ *
+ * Deliberately one `<p:sp>` so a reader can select and delete it in one click,
+ * and styled to match `addImagePlaceholder` so a deck that mixes cloned and
+ * custom slides does not show two different grey boxes.
+ */
+function createPlaceholderShape(id: string, caption: string, box: Box): string {
+  const shapeId = nextRuntimeShapeId();
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="${escapeXml(id)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>`
+    + `<p:spPr><a:xfrm><a:off x="${inToEmu(box.x)}" y="${inToEmu(box.y)}"/><a:ext cx="${inToEmu(box.w)}" cy="${inToEmu(box.h)}"/></a:xfrm>`
+    + `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 4000"/></a:avLst></a:prstGeom>`
+    + `<a:solidFill><a:srgbClr val="${C.grey10}"/></a:solidFill>`
+    + `<a:ln w="12700"><a:solidFill><a:srgbClr val="${C.grey30}"/></a:solidFill><a:prstDash val="dash"/></a:ln></p:spPr>`
+    + `<p:txBody><a:bodyPr wrap="square" anchor="ctr" lIns="182880" rIns="182880"><a:noAutofit/></a:bodyPr><a:lstStyle/>`
+    + `<a:p><a:pPr algn="ctr"><a:buNone/></a:pPr><a:r><a:rPr lang="en" sz="1000" i="1">`
+    + `<a:solidFill><a:srgbClr val="${C.muted}"/></a:solidFill><a:latin typeface="${escapeXml(FONTS.sans)}"/></a:rPr>`
+    + `<a:t>${escapeXml(caption)}</a:t></a:r><a:endParaRPr/></a:p></p:txBody></p:sp>`;
 }
 
 function createTextShape(id: string, text: string, x: number, y: number, w: number, h: number, style: TextStyle = {}): string {

@@ -1,11 +1,8 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { access, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pdf } from "pdf-to-img";
+import { errorMessage, execFileAsync, findExecutable } from "./exec.js";
 import type { BuildWarning } from "./types.js";
-
-const execFileAsync = promisify(execFile);
 
 // Screenshot rendering is an OPTIONAL quality-assurance step. Building the .pptx
 // itself needs no external binaries. Screenshots need a PPTX renderer, and the
@@ -80,24 +77,7 @@ async function renderPdfToPngs(pdfPath: string, outputDir: string): Promise<stri
 }
 
 async function findSoffice(): Promise<string | undefined> {
-  for (const candidate of SOFFICE_CANDIDATES) {
-    if (candidate.includes("/")) {
-      try {
-        await access(candidate);
-        return candidate;
-      } catch {
-        continue;
-      }
-    }
-    try {
-      const result = await execFileAsync(process.platform === "win32" ? "where" : "which", [candidate]);
-      const commandPath = result.stdout.trim().split(/\r?\n/)[0];
-      if (commandPath) return commandPath;
-    } catch {
-      continue;
-    }
-  }
-  return undefined;
+  return findExecutable(SOFFICE_CANDIDATES, "SOFFICE_PATH");
 }
 
 async function removeExistingScreenshots(outputDir: string): Promise<void> {
@@ -107,8 +87,4 @@ async function removeExistingScreenshots(outputDir: string): Promise<void> {
       .filter((file) => file.endsWith(".png") || file.endsWith(".pdf"))
       .map((file) => rm(path.join(outputDir, file), { force: true }))
   );
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
