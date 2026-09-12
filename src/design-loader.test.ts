@@ -108,7 +108,7 @@ test("serializeDesign round-trips through parseDesignFile", (t) => {
   withRestoredDesign(t);
   applyDesign({ colors: { accent: "E8452C" }, fonts: { sans: "Roboto" }, layout: { LM: 1.25 } });
 
-  const patch = parseDesignFile(serializeDesign(), DESIGN);
+  const patch = parseDesignFile(serializeDesign(currentDesign()), DESIGN);
 
   assert.equal(patch.colors?.accent, "E8452C");
   assert.equal(patch.fonts?.sans, "Roboto");

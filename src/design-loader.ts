@@ -11,13 +11,13 @@ import {
   FONT_ROLES,
   LAYOUT_KEYS,
   LOGO_ROLES,
-  currentDesign,
   type ColorName,
   type DesignPatch,
   type FontRole,
+  type FullDesign,
   type LayoutSpec,
   type LogoRole
-} from "./design.js";
+} from "./design-tokens.js";
 
 const HEX = /^#?[0-9a-fA-F]{6}$/;
 
@@ -128,8 +128,14 @@ export function readDesignFileSync(designPath: string): DesignPatch | undefined 
   return parseDesignFile(raw, designPath);
 }
 
-/** Serialise the live design to YAML, for seeding a new workspace's design.yml. */
-export function serializeDesign(): string {
+/**
+ * Serialise a design to YAML, for seeding a new workspace's design.yml.
+ *
+ * Takes the design as an argument rather than reading it, so this module never
+ * has to import `design.ts` — which would be a cycle, since `design.ts` imports
+ * the reader from here to auto-load at startup.
+ */
+export function serializeDesign(design: FullDesign): string {
   const header = [
     "# Your brand.",
     "#",
@@ -140,7 +146,7 @@ export function serializeDesign(): string {
     "# default. Colours are 6-digit hex without a leading '#'.",
     ""
   ].join("\n");
-  return `${header}${YAML.stringify(currentDesign())}`;
+  return `${header}${YAML.stringify(design)}`;
 }
 
 function parse(raw: string, designPath: string, options: YAML.ParseOptions & YAML.SchemaOptions): Record<string, unknown> | undefined {

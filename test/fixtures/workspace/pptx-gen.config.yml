@@ -1,0 +1,14 @@
+# The workspace the test suite runs against.
+#
+# It exists so the suite never picks up the developer's real workspace: without
+# it, a personal ~/.pptx-gen/design.yml would change the colours and fonts the
+# tests assert on, and the suite would pass or fail depending on whose machine
+# it ran on.
+#
+# It points at the install's own starter templates and bundled assets rather
+# than copying them.
+version: 1
+templates: ../../../templates
+assets: ../../../assets
+projects: projects
+design: design.yml

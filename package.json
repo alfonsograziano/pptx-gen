@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "test": "PPTX_GEN_WORKSPACE=test/fixtures/workspace node --import tsx --test \"src/**/*.test.ts\"",
     "cli": "tsx src/cli.ts",
     "ensure-fonts": "tsx src/install-fonts.ts",
     "install-fonts": "tsx src/install-fonts.ts",

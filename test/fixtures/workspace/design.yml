@@ -1,0 +1,3 @@
+# Deliberately empty: the tests assert against the engine's default design, so
+# this file overrides nothing. Its presence proves the loader handles a design
+# file that patches no tokens at all.

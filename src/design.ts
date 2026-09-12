@@ -2,8 +2,8 @@
 //
 // The values below are the engine's DEFAULTS. Your brand does not live here —
 // it lives in `design.yml` in your workspace, which is loaded over these
-// defaults at startup. That split is deliberate: updating the engine must
-// never overwrite your brand.
+// defaults when this module initialises. That split is deliberate: updating
+// the engine must never overwrite your brand.
 //
 // Colours are 6-digit hex WITHOUT a leading '#'. Keep the semantic key names
 // (ink, accent, ...) and just change the values in your `design.yml`, so the
@@ -12,50 +12,12 @@
 // These objects are MUTATED in place by `applyDesign` (see the note there), so
 // that `import { C, LAYOUT } from "pptx-gen"` keeps working everywhere,
 // including at module top level.
+import { readDesignFileSync } from "./design-loader.js";
+import { tryResolveWorkspaceSync } from "./workspace.js";
+import type { ColorName, DesignPatch, FontRole, FullDesign, LayoutSpec, LogoRole } from "./design-tokens.js";
 
-export type ColorName =
-  | "ink"
-  | "accent"
-  | "white"
-  | "accent2"
-  | "accent3"
-  | "surface"
-  | "muted"
-  | "faint"
-  | "grey10"
-  | "grey30"
-  | "grey80"
-  | "accentSoft";
-
-export type FontRole = "sans" | "serif" | "mono";
-
-export type LogoRole = "markDark" | "markLight" | "wordmarkDark" | "wordmarkLight";
-
-export type LayoutSpec = {
-  /** Slide width (in). */
-  width: number;
-  /** Slide height (in): 16:9. */
-  height: number;
-  /** Left margin: all content starts here. */
-  LM: number;
-  /** Content width: from LM to the right content edge. */
-  CW: number;
-  /** Bullet indent left. */
-  BIL: number;
-  /** Body line-spacing multiple. */
-  LS: number;
-};
-
-export const COLOR_NAMES: readonly ColorName[] = [
-  "ink", "accent", "white", "accent2", "accent3",
-  "surface", "muted", "faint", "grey10", "grey30", "grey80", "accentSoft"
-];
-
-export const FONT_ROLES: readonly FontRole[] = ["sans", "serif", "mono"];
-
-export const LOGO_ROLES: readonly LogoRole[] = ["markDark", "markLight", "wordmarkDark", "wordmarkLight"];
-
-export const LAYOUT_KEYS: readonly (keyof LayoutSpec)[] = ["width", "height", "LM", "CW", "BIL", "LS"];
+export type { ColorName, DesignPatch, FontRole, FullDesign, LayoutSpec, LogoRole } from "./design-tokens.js";
+export { COLOR_NAMES, FONT_ROLES, LAYOUT_KEYS, LOGO_ROLES } from "./design-tokens.js";
 
 export const C: Record<ColorName, string> = {
   // Core pairing: a dark tone for text and dark backgrounds, plus one vivid
@@ -114,14 +76,6 @@ export const LOGO_FILES: Record<LogoRole, string> = {
   wordmarkLight: "logo-wordmark-light.png" // full wordmark for DARK backgrounds
 };
 
-/** A partial override of the design, as read from a workspace `design.yml`. */
-export type DesignPatch = {
-  colors?: Partial<Record<ColorName, string>>;
-  fonts?: Partial<Record<FontRole, string>>;
-  layout?: Partial<LayoutSpec>;
-  logos?: Partial<Record<LogoRole, string>>;
-};
-
 /**
  * Apply a workspace design over the engine defaults, in place.
  *
@@ -142,8 +96,8 @@ export function applyDesign(patch: DesignPatch): void {
   if (patch.logos) Object.assign(LOGO_FILES, patch.logos);
 }
 
-/** The current live design, as a patch. Used to seed a new `design.yml`. */
-export function currentDesign(): Required<DesignPatch> {
+/** The current live design, with every token present. Seeds a new `design.yml`. */
+export function currentDesign(): FullDesign {
   return {
     colors: { ...C },
     fonts: { ...FONTS },
@@ -151,3 +105,42 @@ export function currentDesign(): Required<DesignPatch> {
     logos: { ...LOGO_FILES }
   };
 }
+
+/** Where the live design came from. Reported by `pptx-gen workspace`. */
+export type DesignOrigin = { file: string } | { defaults: true };
+
+let origin: DesignOrigin = { defaults: true };
+
+export function designOrigin(): DesignOrigin {
+  return origin;
+}
+
+/**
+ * Load the workspace design over the defaults, as a side effect of importing
+ * this module.
+ *
+ * Doing it here, synchronously, is what makes top-level reads safe: ESM
+ * guarantees this module finishes initialising before any importer's body
+ * runs, so a project's `const { LM } = LAYOUT` already sees workspace values.
+ *
+ * Best-effort by design. No workspace, or a workspace with no design.yml, just
+ * means the engine defaults — the engine has to work in a bare checkout. A
+ * malformed design.yml does throw, because silently ignoring it would ship an
+ * off-brand deck.
+ *
+ * Set PPTX_GEN_NO_AUTOLOAD=1 to pin the defaults (the test suite does).
+ */
+function autoLoadDesign(): void {
+  if (process.env.PPTX_GEN_NO_AUTOLOAD === "1") return;
+
+  const workspace = tryResolveWorkspaceSync();
+  if (!workspace) return;
+
+  const patch = readDesignFileSync(workspace.designPath);
+  if (!patch) return;
+
+  applyDesign(patch);
+  origin = { file: workspace.designPath };
+}
+
+autoLoadDesign();
