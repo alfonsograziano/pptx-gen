@@ -23,6 +23,7 @@ Run `npm run check` before handing work back — there is no CI, so it is the wh
 - `src/*.test.ts` — tests live next to the code they test, not in `test/`.
 - `test/fixtures/workspace/` — the workspace the test suite runs against (`PPTX_GEN_WORKSPACE` is set for `npm test`).
 - `bin/pptx-gen.mjs` → `src/cli.ts` — the CLI entry point.
+- `docs/` — how the engine is put together (`docs/architecture.md`: the module map and the build pipeline, step by step) and why (`docs/decisions/`: one record per decision that would be expensive to reverse, including the reasoning behind every rule below). Read the relevant record before changing something a rule protects; add one when you make a call that constrains later work.
 - `starter/` — what `pptx-gen init` copies into a new workspace. `examples/workspace/` — a real workspace used as the worked example.
 - `skills/` — the four agent skills shipped to *users* of pptx-gen. They are product, not instructions for this repo.
 - `assets/icons/` — 1,900+ Lucide SVGs, vendored. Never hand-edit them.
