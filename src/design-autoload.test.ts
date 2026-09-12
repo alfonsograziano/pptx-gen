@@ -52,12 +52,15 @@ const sans = FONTS.sans;
 console.log(JSON.stringify({ LM, accent: TONES.accent, sans }));
 `;
 
-async function runScript(scriptPath: string, cwd: string, env: NodeJS.ProcessEnv = {}): Promise<Record<string, unknown>> {
-  const { stdout } = await execFileAsync(
-    process.execPath,
-    ["--import", TSX_LOADER, scriptPath],
-    { cwd, env: { ...process.env, PPTX_GEN_NO_AUTOLOAD: "", PPTX_GEN_WORKSPACE: "", ...env } }
-  );
+async function runScript(
+  scriptPath: string,
+  cwd: string,
+  env: NodeJS.ProcessEnv = {}
+): Promise<Record<string, unknown>> {
+  const { stdout } = await execFileAsync(process.execPath, ["--import", TSX_LOADER, scriptPath], {
+    cwd,
+    env: { ...process.env, PPTX_GEN_NO_AUTOLOAD: "", PPTX_GEN_WORKSPACE: "", ...env }
+  });
   return JSON.parse(stdout.trim());
 }
 

@@ -30,7 +30,10 @@ type Pptx = {
 
 type Slide = {
   background: { color: string };
-  addText: (text: string | Array<{ text: string; options?: Record<string, unknown> }>, options?: Record<string, unknown>) => unknown;
+  addText: (
+    text: string | Array<{ text: string; options?: Record<string, unknown> }>,
+    options?: Record<string, unknown>
+  ) => unknown;
   addImage: (options: Record<string, unknown>) => unknown;
   addShape: (shapeName: string, options?: Record<string, unknown>) => unknown;
 };
@@ -100,7 +103,7 @@ export async function renderCustomSlideToPptx(options: {
   const helpers = createCustomSlideHelpers({
     assets: options.assets,
     shapeType: pptx.ShapeType,
-    figures: options.figures,
+    figures: options.figures
   });
 
   await options.customSlide.draw({
@@ -129,7 +132,7 @@ export async function renderCustomSlidesToPptx(options: {
   const helpers = createCustomSlideHelpers({
     assets: options.assets,
     shapeType: pptx.ShapeType,
-    figures: options.figures,
+    figures: options.figures
   });
 
   for (const [index, customSlide] of options.customSlides.entries()) {

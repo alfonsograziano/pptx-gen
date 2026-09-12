@@ -21,10 +21,13 @@ test("headless Chrome renders HTML at exactly the requested pixel size", async (
 
   const htmlPath = path.join(dir, "page.html");
   const pngPath = path.join(dir, "page.png");
-  await writeFile(htmlPath, `<!doctype html><html><head><style>
+  await writeFile(
+    htmlPath,
+    `<!doctype html><html><head><style>
     :root { --accent: #3B82F6; --white: #fff; }
     html, body { margin: 0; width: 400px; height: 250px; overflow: hidden; }
-  </style></head><body>${PAGE}</body></html>`);
+  </style></head><body>${PAGE}</body></html>`
+  );
 
   const size = await screenshotHtml({ htmlPath, pngPath, width: 400, height: 250, scale: 2 });
 
@@ -49,10 +52,13 @@ test("a stale PNG is not mistaken for this run's output", async (t) => {
   const pngPath = path.join(dir, "page.png");
   await writeFile(htmlPath, "<!doctype html><html><body><p>fresh</p></body></html>");
   // A complete but differently-sized PNG left over from an earlier build.
-  await writeFile(pngPath, Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
-    "base64"
-  ));
+  await writeFile(
+    pngPath,
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+      "base64"
+    )
+  );
 
   const size = await screenshotHtml({ htmlPath, pngPath, width: 320, height: 200, scale: 1 });
   assert.deepEqual(size, { pxWidth: 320, pxHeight: 200 }, "the leftover 1x1 must have been replaced");

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/**/*.test.ts",
+    "examples/build-example-source.ts",
+    "examples/workspace/projects/*/build.ts",
+    "examples/workspace/projects/*/custom.ts"
+  ],
+  "project": ["src/**/*.ts", "bin/**/*.mjs", "examples/**/*.ts"]
+}

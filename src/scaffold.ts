@@ -47,9 +47,7 @@ export async function scaffoldProject(options: ScaffoldOptions): Promise<Scaffol
 
 function buildScript(title: string, custom: boolean): string {
   const customImport = custom ? '\nimport { openingSlide } from "./custom.js";' : "";
-  const customUse = custom
-    ? `\ndeck.addCustomSlide(openingSlide({ title: ${JSON.stringify(title)} }));\n`
-    : "";
+  const customUse = custom ? `\ndeck.addCustomSlide(openingSlide({ title: ${JSON.stringify(title)} }));\n` : "";
 
   return `// Build script for "${title}".
 //

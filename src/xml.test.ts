@@ -11,7 +11,7 @@ test("unescapeXml reverses the common entities", () => {
 });
 
 test("escape then unescape round-trips", () => {
-  const original = "Tom & Jerry <tag> \"quote\"";
+  const original = 'Tom & Jerry <tag> "quote"';
   assert.equal(unescapeXml(escapeXml(original)), original);
 });
 

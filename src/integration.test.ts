@@ -12,7 +12,7 @@ import { getSlideEntries } from "./ooxml.js";
 import { C, FONTS } from "./design.js";
 import { BUNDLED_ASSETS, STARTER_TEMPLATES } from "./test-fixtures.js";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const _HERE = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES = STARTER_TEMPLATES;
 const ASSETS = BUNDLED_ASSETS;
 const ICONS = path.join(ASSETS, "icons");
@@ -56,7 +56,13 @@ test("integration: templates + custom slides + every override, verified end-to-e
       "a-short-subtitle-that-sets-up-the-st": "Templates and custom slides in one deck."
     },
     overrides: [
-      { op: "styleText", target: "your-presentation-title-goes-here", color: "#FF0000", fontSize: 40, fontFace: "Georgia" },
+      {
+        op: "styleText",
+        target: "your-presentation-title-goes-here",
+        color: "#FF0000",
+        fontSize: 40,
+        fontFace: "Georgia"
+      },
       { op: "move", target: "a-short-subtitle-that-sets-up-the-st", x: 1.0, y: 4.0 },
       {
         op: "addText",
@@ -197,9 +203,7 @@ test("integration: templates + custom slides + every override, verified end-to-e
   assert.deepEqual(report.templatesUsed, ["title-cover", "content-lead-bullets", "content-lead-bullets"]);
   assert.deepEqual(report.customSlidesUsed, ["system-architecture", "closing"]);
 
-  const unexpected = report.warnings.filter(
-    (w) => !ENV_WARNINGS.has(w.code) && !INFO_WARNINGS.has(w.code)
-  );
+  const unexpected = report.warnings.filter((w) => !ENV_WARNINGS.has(w.code) && !INFO_WARNINGS.has(w.code));
   assert.deepEqual(unexpected, [], `unexpected warnings: ${JSON.stringify(unexpected, null, 2)}`);
 
   // Every slide is listed in deck order. This deck uses no variant groups, so
@@ -229,12 +233,9 @@ test("integration: templates + custom slides + every override, verified end-to-e
   const entries = await getSlideEntries(pkg);
   assert.equal(entries.length, 5, "deck has exactly the five slides we built");
 
-  const xml = await Promise.all(
-    entries.map((e) => pkg.text(`ppt/slides/slide${e.slideNumber}.xml`))
-  );
+  const xml = await Promise.all(entries.map((e) => pkg.text(`ppt/slides/slide${e.slideNumber}.xml`)));
   const [s1, s2, s3, s4, s5] = xml;
-  const text = (s: string) =>
-    [...s.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)].map((m) => m[1]).join("");
+  const text = (s: string) => [...s.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)].map((m) => m[1]).join("");
 
   // --- Slide 1: title-cover with overrides. --------------------------------
   assert.match(text(s1), /Everything, verified/);
@@ -303,11 +304,13 @@ test("integration: templates + custom slides + every override, verified end-to-e
   assert.ok(/Extension="png"/.test(contentTypes), "png content type registered");
 
   const media = pkg.files("ppt/media/");
-  assert.ok(media.some((f) => f.endsWith(".svg")), "an svg media part exists");
-  assert.ok(media.some((f) => f.endsWith(".png")), "the replacement png media part exists");
-
+  assert.ok(
+    media.some((f) => f.endsWith(".svg")),
+    "an svg media part exists"
+  );
   // The replacement png bytes actually landed in the package.
-  const pngInPkg = media.find((f) => f.endsWith(".png"))!;
+  const pngInPkg = media.find((f) => f.endsWith(".png"));
+  assert.ok(pngInPkg, "the replacement png media part exists");
   const pngBytes = await pkg.bytes(pngInPkg);
   assert.deepEqual(pngBytes, TINY_PNG, "png media matches the source bytes");
 

@@ -39,7 +39,7 @@ for (const entry of await readdir(previewRoot, { withFileTypes: true })) {
 
 for (const templateName of templates) {
   const screenshot = path.join(templateRoot, templateName, "screenshots", "slide-01.png");
-  if (!await exists(screenshot)) {
+  if (!(await exists(screenshot))) {
     result.missingScreenshots.push(templateName);
     continue;
   }
@@ -82,5 +82,8 @@ if (result.skipped.length > 0) {
 }
 
 async function exists(filePath: string): Promise<boolean> {
-  return lstat(filePath).then(() => true, () => false);
+  return lstat(filePath).then(
+    () => true,
+    () => false
+  );
 }

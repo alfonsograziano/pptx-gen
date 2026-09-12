@@ -16,7 +16,7 @@ import { BUNDLED_ASSETS, fakeShot, STARTER_TEMPLATES, TINY_PNG } from "./test-fi
 // Figures placed on both kinds of slide, verified in the produced .pptx. The
 // rasterizer is stubbed, so these run identically with or without a browser.
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const _HERE = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES = STARTER_TEMPLATES;
 const ASSETS = BUNDLED_ASSETS;
 
@@ -41,17 +41,25 @@ test("a figure on a custom slide is placed as a picture, inscribed in its box", 
   t.after(() => rm(dir, { recursive: true, force: true }));
 
   const shot = fakeShot();
-  const deck = new Presentation({ title: "Figures", templateLibrary: TEMPLATES, projectDir: dir, assetsDir: ASSETS, shot });
+  const deck = new Presentation({
+    title: "Figures",
+    templateLibrary: TEMPLATES,
+    projectDir: dir,
+    assetsDir: ASSETS,
+    shot
+  });
 
   let placed: { x: number; y: number; w: number; h: number } | undefined;
-  deck.addCustomSlide(new CustomSlide({
-    name: "product",
-    draw: async ({ slide, helpers }) => {
-      helpers.addHeader(slide, "What the operator sees");
-      // A 4:1 figure in a 4:2 box: it must keep its shape and centre itself.
-      placed = await helpers.addFigure(slide, MOCKUP, { x: 5, y: 1.5, w: 4, h: 2 });
-    }
-  }));
+  deck.addCustomSlide(
+    new CustomSlide({
+      name: "product",
+      draw: async ({ slide, helpers }) => {
+        helpers.addHeader(slide, "What the operator sees");
+        // A 4:1 figure in a 4:2 box: it must keep its shape and centre itself.
+        placed = await helpers.addFigure(slide, MOCKUP, { x: 5, y: 1.5, w: 4, h: 2 });
+      }
+    })
+  );
 
   const report = await deck.render({ output: "deck.pptx", progress: false });
 
@@ -81,9 +89,7 @@ test("a figure override drops a picture onto a cloned template slide", async (t)
   deck.addSlideFromTemplate({
     templateName: "title-cover",
     variables: { "overline-label": "Figures" },
-    overrides: [
-      { op: "addFigure", id: "chart", figure: { ...MOCKUP, id: "chart" }, x: 1, y: 1, w: 4, h: 2 }
-    ]
+    overrides: [{ op: "addFigure", id: "chart", figure: { ...MOCKUP, id: "chart" }, x: 1, y: 1, w: 4, h: 2 }]
   });
 
   const report = await deck.render({ output: "deck.pptx", progress: false });
@@ -98,18 +104,25 @@ test("without a browser the deck still builds, with captioned placeholders", asy
   const dir = await mkdtemp(path.join(os.tmpdir(), "pptx-figure-int-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
 
-  const deck = new Presentation({ templateLibrary: TEMPLATES, projectDir: dir, assetsDir: ASSETS, shot: fakeShot({ fail: true }) });
+  const deck = new Presentation({
+    templateLibrary: TEMPLATES,
+    projectDir: dir,
+    assetsDir: ASSETS,
+    shot: fakeShot({ fail: true })
+  });
   deck.addSlideFromTemplate({
     templateName: "title-cover",
     variables: { "overline-label": "Figures" },
     overrides: [{ op: "addFigure", id: "chart", figure: { ...MOCKUP, id: "chart" }, x: 1, y: 1, w: 4, h: 2 }]
   });
-  deck.addCustomSlide(new CustomSlide({
-    name: "product",
-    draw: async ({ slide, helpers }) => {
-      await helpers.addFigure(slide, MOCKUP, { x: 5, y: 1.5, w: 4, h: 2 });
-    }
-  }));
+  deck.addCustomSlide(
+    new CustomSlide({
+      name: "product",
+      draw: async ({ slide, helpers }) => {
+        await helpers.addFigure(slide, MOCKUP, { x: 5, y: 1.5, w: 4, h: 2 });
+      }
+    })
+  );
 
   const report = await deck.render({ output: "deck.pptx", report: "report.md", progress: false });
 
@@ -136,7 +149,10 @@ test("without a browser the deck still builds, with captioned placeholders", asy
  * have something to target. The shipped library has no picture fields, and the
  * geometry rewriting these overrides do is the part most worth pinning down.
  */
-async function templateWithPicture(dir: string, box: { w: number; h: number }): Promise<{ root: string; fieldId: string }> {
+async function templateWithPicture(
+  dir: string,
+  box: { w: number; h: number }
+): Promise<{ root: string; fieldId: string }> {
   const seed = new Presentation({ templateLibrary: TEMPLATES, projectDir: dir, assetsDir: ASSETS });
   const imagePath = path.join(dir, "seed.png");
   await writeFile(imagePath, TINY_PNG);
@@ -148,7 +164,12 @@ async function templateWithPicture(dir: string, box: { w: number; h: number }): 
   await seed.render({ output: "seed.pptx", progress: false });
 
   const root = path.join(dir, "library");
-  await ingestTemplate({ source: path.join(dir, "seed.pptx"), templateRoot: root, templateName: "with-picture", slide: 1 });
+  await ingestTemplate({
+    source: path.join(dir, "seed.pptx"),
+    templateRoot: root,
+    templateName: "with-picture",
+    slide: 1
+  });
 
   const template = await loadTemplate(root, "with-picture");
   const field = template.fieldsFile.fields.find((candidate) => candidate.type === "image");
@@ -187,7 +208,12 @@ test("replaceFigure keeps the template's own image when the figure cannot render
   const before = await slideXml(path.join(dir, "seed.pptx"), 0);
   const originalRel = before.match(/<a:blip\b[^>]*r:embed="([^"]+)"/)?.[1];
 
-  const deck = new Presentation({ templateLibrary: root, projectDir: dir, assetsDir: ASSETS, shot: fakeShot({ fail: true }) });
+  const deck = new Presentation({
+    templateLibrary: root,
+    projectDir: dir,
+    assetsDir: ASSETS,
+    shot: fakeShot({ fail: true })
+  });
   deck.addSlideFromTemplate({
     templateName: "with-picture",
     overrides: [{ op: "replaceFigure", target: fieldId, figure: MOCKUP }]
@@ -216,12 +242,14 @@ test("two custom slides carrying different images keep their own media", async (
   const deck = new Presentation({ templateLibrary: TEMPLATES, projectDir: dir, assetsDir: ASSETS });
   deck.addSlideFromTemplate({ templateName: "title-cover", variables: { "overline-label": "Media" } });
   for (const [index, image] of [red, blue].entries()) {
-    deck.addCustomSlide(new CustomSlide({
-      name: `picture-${index}`,
-      draw: ({ slide }) => {
-        slide.addImage({ path: image, x: 1, y: 1, w: 2, h: 2 });
-      }
-    }));
+    deck.addCustomSlide(
+      new CustomSlide({
+        name: `picture-${index}`,
+        draw: ({ slide }) => {
+          slide.addImage({ path: image, x: 1, y: 1, w: 2, h: 2 });
+        }
+      })
+    );
   }
 
   await deck.render({ output: "deck.pptx", progress: false });
@@ -240,6 +268,8 @@ test("two custom slides carrying different images keep their own media", async (
   assert.equal(targets.length, 2);
   assert.notEqual(targets[0], targets[1], "each slide must reference its own picture part");
 
-  const bytes = await Promise.all(targets.map((target) => pkg.bytes(path.posix.join("ppt", target.replace("../", "")))));
+  const bytes = await Promise.all(
+    targets.map((target) => pkg.bytes(path.posix.join("ppt", target.replace("../", ""))))
+  );
   assert.ok(!bytes[0].equals(bytes[1]), "and those parts must hold different bytes");
 });

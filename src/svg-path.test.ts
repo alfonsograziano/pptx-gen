@@ -5,7 +5,10 @@ import { flattenPath, parseSvg, svgToGeomPoints } from "./svg-path.js";
 test("flattenPath turns a move+line into an absolute subpath", () => {
   const subs = flattenPath("M0 0 L10 0");
   assert.equal(subs.length, 1);
-  assert.deepEqual(subs[0].pts, [[0, 0], [10, 0]]);
+  assert.deepEqual(subs[0].pts, [
+    [0, 0],
+    [10, 0]
+  ]);
   assert.equal(subs[0].closed, false);
 });
 

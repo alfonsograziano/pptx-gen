@@ -24,12 +24,18 @@
   "scripts": {
     "build": "tsc --noEmit",
     "test": "PPTX_GEN_WORKSPACE=test/fixtures/workspace node --import tsx --test \"src/**/*.test.ts\"",
+    "lint": "biome check",
+    "lint:fix": "biome check --write",
+    "format": "biome format --write",
+    "knip": "knip",
+    "check": "npm run lint && npm run build && npm test && npm run knip",
     "cli": "tsx src/cli.ts",
     "example": "tsx src/cli.ts doctor --fix --workspace examples/workspace && tsx src/cli.ts build --script examples/workspace/projects/how-it-works/build.ts && tsx src/cli.ts build --script examples/workspace/projects/figure-mockup/build.ts",
     "ensure-fonts": "tsx src/install-fonts.ts",
     "install-fonts": "tsx src/install-fonts.ts",
     "show-all-templates": "tsx src/show-all-templates.ts",
-    "self-validate": "tsx src/self-validate.ts"
+    "self-validate": "tsx src/self-validate.ts",
+    "reextract-fields": "tsx src/reextract-fields.ts"
   },
   "keywords": [
     "pptx",
@@ -51,7 +57,9 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.13",
     "@types/node": "^26.0.1",
+    "knip": "6.35.1",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   },

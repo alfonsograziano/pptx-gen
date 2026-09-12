@@ -9,13 +9,7 @@ import { cp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { CONFIG_FILENAME } from "./workspace-config.js";
 import { currentDesign } from "./design.js";
 import { serializeDesign } from "./design-loader.js";
-import {
-  engineLinkPath,
-  installDir,
-  loadWorkspace,
-  type Workspace,
-  type WorkspaceProblem
-} from "./workspace.js";
+import { engineLinkPath, installDir, loadWorkspace, type Workspace, type WorkspaceProblem } from "./workspace.js";
 import { ensureDir } from "./fs.js";
 
 export type InitOptions = {
@@ -87,7 +81,7 @@ export async function initWorkspace(options: InitOptions): Promise<InitResult> {
   if (existsSync(configPath) && !options.force) {
     throw new Error(
       `${configPath} already exists — this is already a workspace.\n` +
-      "Run `pptx-gen init --force` to refresh its scaffolding, or pick another directory."
+        "Run `pptx-gen init --force` to refresh its scaffolding, or pick another directory."
     );
   }
 
@@ -141,7 +135,7 @@ export async function initWorkspace(options: InitOptions): Promise<InitResult> {
  * The link names the install DIRECTORY, so updating the engine in place (a git
  * pull) needs no relinking. Only moving the install does.
  */
-export async function linkEngine(workspaceRoot: string): Promise<string | undefined> {
+async function linkEngine(workspaceRoot: string): Promise<string | undefined> {
   const link = engineLinkPath(workspaceRoot);
   await ensureDir(path.dirname(link));
   // Replace rather than merge: a stale link pointing at an old checkout is

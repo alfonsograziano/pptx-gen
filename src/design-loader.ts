@@ -23,7 +23,7 @@ const HEX = /^#?[0-9a-fA-F]{6}$/;
 
 const SECTIONS = ["colors", "fonts", "layout", "logos"];
 
-export class DesignFileError extends Error {
+class DesignFileError extends Error {
   constructor(designPath: string, detail: string) {
     super(`${designPath}: ${detail}`);
     this.name = "DesignFileError";
@@ -87,7 +87,10 @@ export function parseDesignFile(raw: string, designPath: string): DesignPatch {
     for (const [key, value] of Object.entries(layout)) {
       assertKnown(key, LAYOUT_KEYS, "layout", designPath);
       if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
-        throw new DesignFileError(designPath, `layout.${key} must be a positive number of inches, got ${describe(value)}.`);
+        throw new DesignFileError(
+          designPath,
+          `layout.${key} must be a positive number of inches, got ${describe(value)}.`
+        );
       }
       out[key as keyof LayoutSpec] = value;
     }
@@ -149,7 +152,11 @@ export function serializeDesign(design: FullDesign): string {
   return `${header}${YAML.stringify(design)}`;
 }
 
-function parse(raw: string, designPath: string, options: YAML.ParseOptions & YAML.SchemaOptions): Record<string, unknown> | undefined {
+function parse(
+  raw: string,
+  designPath: string,
+  options: YAML.ParseOptions & YAML.SchemaOptions
+): Record<string, unknown> | undefined {
   let parsed: unknown;
   try {
     parsed = YAML.parse(raw, options);
@@ -158,7 +165,10 @@ function parse(raw: string, designPath: string, options: YAML.ParseOptions & YAM
   }
   if (parsed === null || parsed === undefined) return undefined;
   if (typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new DesignFileError(designPath, `expected a mapping with any of ${SECTIONS.join(", ")}, got ${describe(parsed)}.`);
+    throw new DesignFileError(
+      designPath,
+      `expected a mapping with any of ${SECTIONS.join(", ")}, got ${describe(parsed)}.`
+    );
   }
   return parsed as Record<string, unknown>;
 }

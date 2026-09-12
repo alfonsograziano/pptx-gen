@@ -12,13 +12,13 @@ import type { BuildWarning } from "./types.js";
 // If LibreOffice is not installed, we skip screenshots with a clear message
 // instead of failing. Install it from https://www.libreoffice.org to enable
 // them, then re-run the build.
-const SOFFICE_CANDIDATES = [
-  "soffice",
-  "libreoffice",
-  "/Applications/LibreOffice.app/Contents/MacOS/soffice"
-];
+const SOFFICE_CANDIDATES = ["soffice", "libreoffice", "/Applications/LibreOffice.app/Contents/MacOS/soffice"];
 
-export async function renderScreenshots(pptxPath: string, outputDir: string, warnings: BuildWarning[]): Promise<string[]> {
+export async function renderScreenshots(
+  pptxPath: string,
+  outputDir: string,
+  warnings: BuildWarning[]
+): Promise<string[]> {
   await mkdir(outputDir, { recursive: true });
   await removeExistingScreenshots(outputDir);
 
@@ -26,7 +26,8 @@ export async function renderScreenshots(pptxPath: string, outputDir: string, war
   if (!soffice) {
     warnings.push({
       code: "screenshots-skipped",
-      message: "LibreOffice was not found, so screenshots were skipped. The .pptx was still built. Install LibreOffice (https://www.libreoffice.org) to enable screenshots."
+      message:
+        "LibreOffice was not found, so screenshots were skipped. The .pptx was still built. Install LibreOffice (https://www.libreoffice.org) to enable screenshots."
     });
     return [];
   }

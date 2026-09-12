@@ -55,7 +55,7 @@ export class BuildProgress {
 
   constructor(title: string, expectedSteps: number) {
     this.totalSteps = Math.max(1, expectedSteps);
-    process.stdout.write(`\n${bold("📦 " + title)}\n\n`);
+    process.stdout.write(`\n${bold(`📦 ${title}`)}\n\n`);
   }
 
   /** Run `fn` as a named step, timing it and updating the live line. */
@@ -145,14 +145,16 @@ export class BuildProgress {
     const total = now() - this.startedAt;
 
     const slowest = [...this.finished].sort((a, b) => b.ms - a.ms).slice(0, 3);
-    process.stdout.write(`\n${green("✓ Deck built")} ${dim("in " + formatMs(total))}\n`);
+    process.stdout.write(`\n${green("✓ Deck built")} ${dim(`in ${formatMs(total)}`)}\n`);
     process.stdout.write(`  ${dim("Output:")}   ${summary.output}\n`);
     process.stdout.write(`  ${dim("Slides:")}   ${summary.slides}\n`);
     process.stdout.write(
       `  ${dim("Warnings:")} ${summary.warnings === 0 ? dim("0") : color("33", String(summary.warnings))}\n`
     );
     if (slowest.length > 0) {
-      process.stdout.write(`  ${dim("Slowest:")}  ${slowest.map((s) => `${s.label} ${formatMs(s.ms)}`).join(dim(", "))}\n`);
+      process.stdout.write(
+        `  ${dim("Slowest:")}  ${slowest.map((s) => `${s.label} ${formatMs(s.ms)}`).join(dim(", "))}\n`
+      );
     }
     process.stdout.write("\n");
   }

@@ -44,7 +44,10 @@ test("digits-only colours survive YAML's number coercion", () => {
 
 test("a value that is not a hex colour is still rejected", () => {
   assert.throws(() => parseDesignFile("colors:\n  ink: 0x1122\n", DESIGN), /must be a 6-digit hex colour/);
-  assert.throws(() => parseDesignFile("colors:\n  ink: 12345\n", DESIGN), /must be a 6-digit hex colour such as "3B82F6", got "12345"\./);
+  assert.throws(
+    () => parseDesignFile("colors:\n  ink: 12345\n", DESIGN),
+    /must be a 6-digit hex colour such as "3B82F6", got "12345"\./
+  );
 });
 
 test("a bad hex colour names the offending key", () => {
@@ -73,12 +76,21 @@ test("an unknown colour key lists the valid ones", () => {
 });
 
 test("an unknown section is rejected", () => {
-  assert.throws(() => parseDesignFile("colours:\n  ink: 000000\n", DESIGN), /unknown section "colours"\. Valid sections: colors, fonts, layout, logos\./);
+  assert.throws(
+    () => parseDesignFile("colours:\n  ink: 000000\n", DESIGN),
+    /unknown section "colours"\. Valid sections: colors, fonts, layout, logos\./
+  );
 });
 
 test("layout values must be positive numbers", () => {
-  assert.throws(() => parseDesignFile("layout:\n  LM: 0\n", DESIGN), /layout\.LM must be a positive number of inches, got a number\./);
-  assert.throws(() => parseDesignFile('layout:\n  LM: "0.75"\n', DESIGN), /layout\.LM must be a positive number of inches, got "0\.75"\./);
+  assert.throws(
+    () => parseDesignFile("layout:\n  LM: 0\n", DESIGN),
+    /layout\.LM must be a positive number of inches, got a number\./
+  );
+  assert.throws(
+    () => parseDesignFile('layout:\n  LM: "0.75"\n', DESIGN),
+    /layout\.LM must be a positive number of inches, got "0\.75"\./
+  );
   assert.deepEqual(parseDesignFile("layout:\n  LM: 1.5\n", DESIGN).layout, { LM: 1.5 });
 });
 

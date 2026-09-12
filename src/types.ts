@@ -7,11 +7,6 @@ export type MarkdownText = {
   value: string;
 };
 
-export type TemplateIndex = Record<string, {
-  slideIndex: number;
-  metadata: string;
-}>;
-
 export type TemplateField = {
   id: string;
   type: "text" | "image";
@@ -61,7 +56,16 @@ export type SlideOverride =
   | { op: "move"; target: string; x: number; y: number }
   | { op: "resize"; target: string; w: number; h: number }
   | { op: "styleText"; target: string; fontSize?: number; color?: string; fontFace?: string }
-  | { op: "addText"; id: string; text: PrimitiveRichText; x: number; y: number; w: number; h: number; style?: TextStyle }
+  | {
+      op: "addText";
+      id: string;
+      text: PrimitiveRichText;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      style?: TextStyle;
+    }
   | { op: "addSvg"; id: string; path: string; x: number; y: number; w: number; h: number }
   | { op: "addIcon"; id: string; icon: string; x: number; y: number; w: number; h: number; color?: string }
   | { op: "replaceImage"; target: string; path: string }

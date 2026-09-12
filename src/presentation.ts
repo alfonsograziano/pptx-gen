@@ -1,14 +1,39 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { AddSlideOptions, BuildReport, BuildReportSlide, BuildWarning, DeckSlide, RenderOptions } from "./types.js";
+import type {
+  AddSlideOptions,
+  BuildReport,
+  BuildReportSlide,
+  BuildWarning,
+  DeckSlide,
+  RenderOptions
+} from "./types.js";
 import { PptxPackage } from "./pptx-package.js";
-import { appendSlideFromPackage, applyOverrides, applySlideNumbering, convertCustomSlidePageNumber, convertTemplatePageNumber, fillSlideText, flattenSlideNumberFields, getSlideEntries, keepOnlySlides, mergeEmbeddedFonts, validateFonts, validatePackage } from "./ooxml.js";
+import {
+  appendSlideFromPackage,
+  applyOverrides,
+  applySlideNumbering,
+  convertCustomSlidePageNumber,
+  convertTemplatePageNumber,
+  fillSlideText,
+  flattenSlideNumberFields,
+  getSlideEntries,
+  keepOnlySlides,
+  mergeEmbeddedFonts,
+  validateFonts,
+  validatePackage
+} from "./ooxml.js";
 import { richTextToPlain } from "./rich-text.js";
 import { loadTemplate } from "./templates.js";
 import { ensureDir, writeTextFile } from "./fs.js";
 import { renderScreenshots } from "./render.js";
-import { CustomSlide, makeCustomSlideTempPath, renderCustomSlideToPptx, renderCustomSlidesToPptx } from "./custom-slide.js";
+import {
+  type CustomSlide,
+  makeCustomSlideTempPath,
+  renderCustomSlideToPptx,
+  renderCustomSlidesToPptx
+} from "./custom-slide.js";
 import { FigureRenderer } from "./figure.js";
 import type { ShotFn } from "./html-shot.js";
 import { BuildProgress, dimKind } from "./progress.js";
@@ -65,14 +90,13 @@ export class Presentation {
     // assets fall back to the engine's own folder, which is where the bundled
     // icons live anyway. That keeps `new Presentation({ templateLibrary })`
     // usable with no workspace at all.
-    const workspace = options.templateLibrary === undefined
-      ? options.workspace ?? resolveWorkspaceSync()
-      : options.workspace;
+    const workspace =
+      options.templateLibrary === undefined ? (options.workspace ?? resolveWorkspaceSync()) : options.workspace;
 
-    this.templateRoot = path.resolve(options.templateLibrary ?? workspace!.templatesDir);
-    this.assetsDir = path.resolve(
-      options.assetsDir ?? workspace?.assetsDir ?? path.join(installDir(), "assets")
-    );
+    // `workspace` is only ever undefined when `templateLibrary` was given, in
+    // which case the left-hand side wins and the fallback is never evaluated.
+    this.templateRoot = path.resolve(options.templateLibrary ?? (workspace ?? resolveWorkspaceSync()).templatesDir);
+    this.assetsDir = path.resolve(options.assetsDir ?? workspace?.assetsDir ?? path.join(installDir(), "assets"));
     this.assets = createAssetResolver({
       projectDir: this.projectDir,
       assetsDir: this.assetsDir,
@@ -104,9 +128,8 @@ export class Presentation {
 
     // Steps: one per slide + validate fonts + save + validate package + screenshots (+ report).
     const expectedSteps = this.slides.length + 4 + (options.report ? 1 : 0);
-    const progress = options.progress === false
-      ? SILENT_PROGRESS
-      : new BuildProgress(this.title ?? "Building deck", expectedSteps);
+    const progress =
+      options.progress === false ? SILENT_PROGRESS : new BuildProgress(this.title ?? "Building deck", expectedSteps);
 
     // One renderer for the whole build, so a figure used on several slides is
     // rasterized once and a missing browser is reported once.
@@ -131,82 +154,97 @@ export class Presentation {
       const position = `${index + 1}/${this.slides.length}`;
 
       if (requestedSlide.kind === "custom") {
-        await progress.step(`Slide ${position}  ${requestedSlide.slide.name} ${dimKind(kindLabel(listing[index]))}`, async () => {
-          for (const font of requestedSlide.slide.requiredFonts) requiredFonts.add(font);
+        await progress.step(
+          `Slide ${position}  ${requestedSlide.slide.name} ${dimKind(kindLabel(listing[index]))}`,
+          async () => {
+            for (const font of requestedSlide.slide.requiredFonts) requiredFonts.add(font);
 
-          const tempPptx = await makeCustomSlideTempPath();
-          await renderCustomSlideToPptx({
-            customSlide: requestedSlide.slide,
-            output: tempPptx,
-            pageNum: index + 1,
-            assets: this.assets,
-            title: this.title,
-            figures
-          });
+            const tempPptx = await makeCustomSlideTempPath();
+            await renderCustomSlideToPptx({
+              customSlide: requestedSlide.slide,
+              output: tempPptx,
+              pageNum: index + 1,
+              assets: this.assets,
+              title: this.title,
+              figures
+            });
 
-          const srcPkg = await PptxPackage.load(tempPptx);
-          const srcEntries = await getSlideEntries(srcPkg);
-          if (srcEntries.length === 0) {
-            throw new Error(`Custom slide '${requestedSlide.slide.name}' produced no slides.`);
+            const srcPkg = await PptxPackage.load(tempPptx);
+            const srcEntries = await getSlideEntries(srcPkg);
+            if (srcEntries.length === 0) {
+              throw new Error(`Custom slide '${requestedSlide.slide.name}' produced no slides.`);
+            }
+
+            const clonedSlideNumber = await appendSlideFromPackage(pkg, srcPkg, srcEntries[0].slideNumber, warnings);
+            await convertCustomSlidePageNumber(pkg, clonedSlideNumber);
+            clonedSlides.push(clonedSlideNumber);
+            customSlidesUsed.push(requestedSlide.slide.name);
+            warnings.push({
+              code: "custom-slide-generated",
+              message: `Generated custom slide '${requestedSlide.slide.name}'.`,
+              slide: index + 1,
+              target: requestedSlide.slide.name
+            });
           }
-
-          const clonedSlideNumber = await appendSlideFromPackage(pkg, srcPkg, srcEntries[0].slideNumber, warnings);
-          await convertCustomSlidePageNumber(pkg, clonedSlideNumber);
-          clonedSlides.push(clonedSlideNumber);
-          customSlidesUsed.push(requestedSlide.slide.name);
-          warnings.push({
-            code: "custom-slide-generated",
-            message: `Generated custom slide '${requestedSlide.slide.name}'.`,
-            slide: index + 1,
-            target: requestedSlide.slide.name
-          });
-        });
+        );
         continue;
       }
 
-      await progress.step(`Slide ${position}  ${requestedSlide.options.templateName} ${dimKind(kindLabel(listing[index]))}`, async () => {
-        const template = requestedSlide.options.templateName === firstTemplate.id
-          ? firstTemplate
-          : await loadTemplate(this.templateRoot, requestedSlide.options.templateName);
-        for (const font of template.metadata.fonts ?? []) requiredFonts.add(font);
+      await progress.step(
+        `Slide ${position}  ${requestedSlide.options.templateName} ${dimKind(kindLabel(listing[index]))}`,
+        async () => {
+          const template =
+            requestedSlide.options.templateName === firstTemplate.id
+              ? firstTemplate
+              : await loadTemplate(this.templateRoot, requestedSlide.options.templateName);
+          for (const font of template.metadata.fonts ?? []) requiredFonts.add(font);
 
-        const isFirstTemplate = template.id === firstTemplate.id;
-        const srcPkg = isFirstTemplate ? pkg : await PptxPackage.load(template.pptxPath);
-        const srcEntries = isFirstTemplate ? firstTemplateEntries : await getSlideEntries(srcPkg);
-        if (srcEntries.length === 0) {
-          throw new Error(`Slide ${index + 1} template '${requestedSlide.options.templateName}' contains no slides.`);
+          const isFirstTemplate = template.id === firstTemplate.id;
+          const srcPkg = isFirstTemplate ? pkg : await PptxPackage.load(template.pptxPath);
+          const srcEntries = isFirstTemplate ? firstTemplateEntries : await getSlideEntries(srcPkg);
+          if (srcEntries.length === 0) {
+            throw new Error(`Slide ${index + 1} template '${requestedSlide.options.templateName}' contains no slides.`);
+          }
+          if (srcEntries.length > 1) {
+            warnings.push({
+              code: "multi-slide-template",
+              message: `Template '${requestedSlide.options.templateName}' contains ${srcEntries.length} slides; using the first.`,
+              slide: index + 1,
+              target: requestedSlide.options.templateName
+            });
+          }
+
+          const clonedSlideNumber = await appendSlideFromPackage(pkg, srcPkg, srcEntries[0].slideNumber, warnings);
+          // Carry over any fonts this slide's source embeds that the base package
+          // lacks, so the output deck is self-contained for every typeface it uses.
+          await mergeEmbeddedFonts(pkg, srcPkg, warnings);
+          clonedSlides.push(clonedSlideNumber);
+          templatesUsed.push(requestedSlide.options.templateName);
+
+          const variables = Object.fromEntries(
+            Object.entries(requestedSlide.options.variables ?? {}).map(([key, value]) => [key, richTextToPlain(value)])
+          );
+
+          await fillSlideText(pkg, clonedSlideNumber, template.fieldsFile.fields, variables, warnings);
+          await convertTemplatePageNumber(pkg, clonedSlideNumber, template.fieldsFile.fields);
+          await applyOverrides(
+            pkg,
+            clonedSlideNumber,
+            template.fieldsFile.fields,
+            requestedSlide.options.overrides ?? [],
+            {
+              assets: this.assets,
+              warnings,
+              figures
+            }
+          );
         }
-        if (srcEntries.length > 1) {
-          warnings.push({
-            code: "multi-slide-template",
-            message: `Template '${requestedSlide.options.templateName}' contains ${srcEntries.length} slides; using the first.`,
-            slide: index + 1,
-            target: requestedSlide.options.templateName
-          });
-        }
-
-        const clonedSlideNumber = await appendSlideFromPackage(pkg, srcPkg, srcEntries[0].slideNumber, warnings);
-        // Carry over any fonts this slide's source embeds that the base package
-        // lacks, so the output deck is self-contained for every typeface it uses.
-        await mergeEmbeddedFonts(pkg, srcPkg, warnings);
-        clonedSlides.push(clonedSlideNumber);
-        templatesUsed.push(requestedSlide.options.templateName);
-
-        const variables = Object.fromEntries(
-          Object.entries(requestedSlide.options.variables ?? {}).map(([key, value]) => [key, richTextToPlain(value)])
-        );
-
-        await fillSlideText(pkg, clonedSlideNumber, template.fieldsFile.fields, variables, warnings);
-        await convertTemplatePageNumber(pkg, clonedSlideNumber, template.fieldsFile.fields);
-        await applyOverrides(pkg, clonedSlideNumber, template.fieldsFile.fields, requestedSlide.options.overrides ?? [], {
-          assets: this.assets,
-          warnings,
-          figures
-        });
-      });
+      );
     }
 
-    await progress.step(`Validating fonts ${dimKind([...requiredFonts].join(", ") || "none")}`, () => validateFonts(pkg, [...requiredFonts], warnings));
+    await progress.step(`Validating fonts ${dimKind([...requiredFonts].join(", ") || "none")}`, () =>
+      validateFonts(pkg, [...requiredFonts], warnings)
+    );
     await progress.step("Assembling and saving deck", async () => {
       // Only now is the set of figures this build used complete.
       await figures.prune();
@@ -221,9 +259,8 @@ export class Presentation {
     const screenshotDir = options.screenshots
       ? path.resolve(this.projectDir, options.screenshots)
       : path.join(path.dirname(output), "screenshots");
-    const screenshots = await progress.step(
-      "Rendering screenshots (LibreOffice)",
-      () => this.renderPreview(output, screenshotDir, warnings)
+    const screenshots = await progress.step("Rendering screenshots (LibreOffice)", () =>
+      this.renderPreview(output, screenshotDir, warnings)
     );
 
     const report: BuildReport = {
@@ -238,9 +275,10 @@ export class Presentation {
       figures: figures.results()
     };
 
-    if (options.report) {
+    const reportPath = options.report;
+    if (reportPath) {
       await progress.step("Writing build report", () =>
-        writeTextFile(path.resolve(this.projectDir, options.report!), formatReport(report, this.projectDir))
+        writeTextFile(path.resolve(this.projectDir, reportPath), formatReport(report, this.projectDir))
       );
     }
 
@@ -298,7 +336,6 @@ export class Presentation {
     warnings: BuildWarning[],
     listing: BuildReportSlide[]
   ): Promise<BuildReport> {
-
     const customSlides = this.slides.map((slide) => {
       if (slide.kind !== "custom") throw new Error("Unexpected non-custom slide in all-custom render path.");
       return slide.slide;
@@ -306,9 +343,8 @@ export class Presentation {
 
     // Steps: render+save + validate package + screenshots (+ report).
     const expectedSteps = 3 + (options.report ? 1 : 0);
-    const progress = options.progress === false
-      ? SILENT_PROGRESS
-      : new BuildProgress(this.title ?? "Building deck", expectedSteps);
+    const progress =
+      options.progress === false ? SILENT_PROGRESS : new BuildProgress(this.title ?? "Building deck", expectedSteps);
 
     const figures = this.makeFigureRenderer(output, options, warnings, progress);
 
@@ -345,9 +381,8 @@ export class Presentation {
     const screenshotDir = options.screenshots
       ? path.resolve(this.projectDir, options.screenshots)
       : path.join(path.dirname(output), "screenshots");
-    const screenshots = await progress.step(
-      "Rendering screenshots (LibreOffice)",
-      () => this.renderPreview(output, screenshotDir, warnings)
+    const screenshots = await progress.step("Rendering screenshots (LibreOffice)", () =>
+      this.renderPreview(output, screenshotDir, warnings)
     );
 
     const report: BuildReport = {
@@ -362,9 +397,10 @@ export class Presentation {
       figures: figures.results()
     };
 
-    if (options.report) {
+    const reportPath = options.report;
+    if (reportPath) {
       await progress.step("Writing build report", () =>
-        writeTextFile(path.resolve(this.projectDir, options.report!), formatReport(report, this.projectDir))
+        writeTextFile(path.resolve(this.projectDir, reportPath), formatReport(report, this.projectDir))
       );
     }
 
@@ -399,8 +435,8 @@ function buildSlideListing(slides: DeckSlide[], warnings: BuildWarning[]): Build
   const seen = new Map<string, number>();
   for (const entry of listing) {
     if (!entry.group) continue;
-    const positions = positionsByGroup.get(entry.group)!;
-    if (positions.length < 2) {
+    const positions = positionsByGroup.get(entry.group);
+    if (!positions || positions.length < 2) {
       delete entry.group;
       continue;
     }
@@ -436,8 +472,7 @@ function formatSlidesSection(report: BuildReport): string {
   // Only pair slides with screenshots when there is one per slide; LibreOffice
   // may have been missing, in which case the suffix is simply left off.
   const screenshots = report.screenshots.length === report.slides.length ? report.screenshots : null;
-  const shot = (entry: BuildReportSlide) =>
-    screenshots ? ` — ${path.basename(screenshots[entry.index - 1])}` : "";
+  const shot = (entry: BuildReportSlide) => (screenshots ? ` — ${path.basename(screenshots[entry.index - 1])}` : "");
 
   const lines: string[] = [];
   for (let i = 0; i < report.slides.length; i += 1) {
@@ -447,7 +482,7 @@ function formatSlidesSection(report: BuildReport): string {
       continue;
     }
     if (entry.variant === 1) {
-      const last = entry.index + entry.variantCount! - 1;
+      const last = entry.index + (entry.variantCount ?? 1) - 1;
       lines.push(
         `- Variant group \`${entry.group}\` — ${entry.variantCount} variants, slides ${entry.index}-${last}. Pick one:`
       );
@@ -463,7 +498,7 @@ function formatVariantGroups(report: BuildReport): string {
   const counts = new Map<string, number>();
   for (const entry of report.slides) {
     if (!entry.group) continue;
-    counts.set(entry.group, entry.variantCount!);
+    counts.set(entry.group, entry.variantCount ?? 1);
   }
   if (counts.size === 0) return "none";
   return [...counts].map(([group, count]) => `${group} (${count})`).join(", ");
@@ -505,10 +540,13 @@ ${report.warnings.length ? report.warnings.map((warning) => `- ${warning.code}: 
 
 function formatFigures(figures: BuildReport["figures"]): string {
   if (figures.length === 0) return "- None";
-  return figures.map((figure) => {
-    const detail = figure.status === "placeholder"
-      ? `placeholder (${figure.reason ?? "not rendered"})`
-      : `${figure.status}, ${figure.pxWidth}x${figure.pxHeight}`;
-    return `- ${figure.id}: ${detail} — ${figure.htmlPath}`;
-  }).join("\n");
+  return figures
+    .map((figure) => {
+      const detail =
+        figure.status === "placeholder"
+          ? `placeholder (${figure.reason ?? "not rendered"})`
+          : `${figure.status}, ${figure.pxWidth}x${figure.pxHeight}`;
+      return `- ${figure.id}: ${detail} — ${figure.htmlPath}`;
+    })
+    .join("\n");
 }

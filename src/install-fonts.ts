@@ -31,7 +31,6 @@
 import { access, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import os from "node:os";
 import path from "node:path";
 import { PptxPackage } from "./pptx-package.js";
 import { extractFonts } from "./ooxml.js";
@@ -70,8 +69,15 @@ function designFonts(): Record<string, { weights: number[]; italicWeights: numbe
 
 // Weight number -> the word Google Fonts uses, for human-readable file names.
 const WEIGHT_NAMES: Record<number, string> = {
-  100: "Thin", 200: "ExtraLight", 300: "Light", 400: "Regular",
-  500: "Medium", 600: "SemiBold", 700: "Bold", 800: "ExtraBold", 900: "Black"
+  100: "Thin",
+  200: "ExtraLight",
+  300: "Light",
+  400: "Regular",
+  500: "Medium",
+  600: "SemiBold",
+  700: "Bold",
+  800: "ExtraBold",
+  900: "Black"
 };
 
 // Variable font files that would make LibreOffice substitute a wrong font, one
@@ -93,8 +99,20 @@ const LEGACY_USER_AGENT = "Mozilla/4.0";
 type StaticFace = { family: string; weight: number; italic: boolean; url: string };
 
 const WEIGHT_WORDS = new Set([
-  "thin", "extralight", "ultralight", "light", "regular", "medium",
-  "semibold", "demibold", "bold", "extrabold", "ultrabold", "black", "heavy", "italic"
+  "thin",
+  "extralight",
+  "ultralight",
+  "light",
+  "regular",
+  "medium",
+  "semibold",
+  "demibold",
+  "bold",
+  "extrabold",
+  "ultrabold",
+  "black",
+  "heavy",
+  "italic"
 ]);
 
 function baseFamily(font: string): string {
@@ -183,7 +201,9 @@ async function main(): Promise<void> {
       continue;
     }
     if (faces.length === 0) {
-      console.warn(`No static .ttf faces found for ${family} (the Google Fonts API response was empty or in an unexpected format).`);
+      console.warn(
+        `No static .ttf faces found for ${family} (the Google Fonts API response was empty or in an unexpected format).`
+      );
       cannotInstall.push(family);
       continue;
     }
@@ -269,7 +289,9 @@ function staticFileName(face: StaticFace): string {
 async function embeddedFonts(pkg: PptxPackage): Promise<Set<string>> {
   const xml = await pkg.text("ppt/presentation.xml");
   const embedded = new Set<string>();
-  for (const match of xml.matchAll(/<p:embeddedFont>[\s\S]*?<p:font typeface="([^"]+)"\/>[\s\S]*?<\/p:embeddedFont>/g)) {
+  for (const match of xml.matchAll(
+    /<p:embeddedFont>[\s\S]*?<p:font typeface="([^"]+)"\/>[\s\S]*?<\/p:embeddedFont>/g
+  )) {
     embedded.add(match[1]);
   }
   return embedded;

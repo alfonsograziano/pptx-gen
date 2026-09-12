@@ -1,6 +1,4 @@
 import { readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import path from "node:path";
 import { C, FONTS, LAYOUT, LOGO_FILES } from "./design.js";
 import { fitBox, type Figure, type FigureFit, type FigureRenderer } from "./figure.js";
 import { PAGE_NUMBER_SHAPE_NAME } from "./ooxml.js";
@@ -75,10 +73,7 @@ export function createCustomSlideHelpers(options: {
     // fallback the field carries until the build fills in the real position.
     addFooter(slide: Slide, opts: { light?: boolean } = {}) {
       const light = opts.light ?? true;
-      slide.addText([
-        { text: "-", options: { breakLine: true } },
-        { text: "1" }
-      ], {
+      slide.addText([{ text: "-", options: { breakLine: true } }, { text: "1" }], {
         objectName: PAGE_NUMBER_SHAPE_NAME,
         x: 0.5,
         y: 5.1,
@@ -113,30 +108,28 @@ export function createCustomSlideHelpers(options: {
       });
     },
 
-    addTextBlock(
-      slide: Slide,
-      runs: TextRun[],
-      box: Box,
-      style: TextOptions = {}
-    ) {
+    addTextBlock(slide: Slide, runs: TextRun[], box: Box, style: TextOptions = {}) {
       slide.addText(runs, {
         ...box,
-        fontSize: style.fontSize as number | undefined ?? 10,
-        fontFace: style.fontFace as string | undefined ?? FONTS.sans,
-        color: style.color as string | undefined ?? C.ink,
-        lineSpacingMultiple: style.lineSpacingMultiple as number | undefined ?? LAYOUT.LS,
-        valign: style.valign as string | undefined ?? "top",
-        margin: style.margin as number | undefined ?? 0,
+        fontSize: (style.fontSize as number | undefined) ?? 10,
+        fontFace: (style.fontFace as string | undefined) ?? FONTS.sans,
+        color: (style.color as string | undefined) ?? C.ink,
+        lineSpacingMultiple: (style.lineSpacingMultiple as number | undefined) ?? LAYOUT.LS,
+        valign: (style.valign as string | undefined) ?? "top",
+        margin: (style.margin as number | undefined) ?? 0,
         ...style
       });
     },
 
-    addCard(slide: Slide, opts: Box & {
-      heading: string;
-      body?: string;
-      accent?: string;
-      fill?: string;
-    }) {
+    addCard(
+      slide: Slide,
+      opts: Box & {
+        heading: string;
+        body?: string;
+        accent?: string;
+        fill?: string;
+      }
+    ) {
       const accent = stripHash(opts.accent ?? C.accent);
       const fill = stripHash(opts.fill ?? C.white);
       slide.addShape(shapeType.rect, {
@@ -229,15 +222,18 @@ export function createCustomSlideHelpers(options: {
       return placed;
     },
 
-    addArrow(slide: Slide, opts: {
-      from: Point;
-      to: Point;
-      color?: string;
-      width?: number;
-      dashed?: boolean;
-      beginArrowType?: ArrowType;
-      endArrowType?: ArrowType;
-    }) {
+    addArrow(
+      slide: Slide,
+      opts: {
+        from: Point;
+        to: Point;
+        color?: string;
+        width?: number;
+        dashed?: boolean;
+        beginArrowType?: ArrowType;
+        endArrowType?: ArrowType;
+      }
+    ) {
       slide.addShape(shapeType.line, {
         x: opts.from.x,
         y: opts.from.y,
@@ -253,13 +249,16 @@ export function createCustomSlideHelpers(options: {
       });
     },
 
-    addConnector(slide: Slide, opts: {
-      points: Point[];
-      color?: string;
-      width?: number;
-      dashed?: boolean;
-      endArrowType?: ArrowType;
-    }) {
+    addConnector(
+      slide: Slide,
+      opts: {
+        points: Point[];
+        color?: string;
+        width?: number;
+        dashed?: boolean;
+        endArrowType?: ArrowType;
+      }
+    ) {
       for (let index = 1; index < opts.points.length; index += 1) {
         this.addArrow(slide, {
           from: opts.points[index - 1],
@@ -267,7 +266,7 @@ export function createCustomSlideHelpers(options: {
           color: opts.color,
           width: opts.width,
           dashed: opts.dashed,
-          endArrowType: index === opts.points.length - 1 ? opts.endArrowType ?? "triangle" : "none"
+          endArrowType: index === opts.points.length - 1 ? (opts.endArrowType ?? "triangle") : "none"
         });
       }
     },
@@ -314,14 +313,17 @@ export function createCustomSlideHelpers(options: {
       });
     },
 
-    addCodePanel(slide: Slide, opts: {
-      code: string;
-      x: number;
-      y: number;
-      w: number;
-      maxH: number;
-      fontFace?: string;
-    }) {
+    addCodePanel(
+      slide: Slide,
+      opts: {
+        code: string;
+        x: number;
+        y: number;
+        w: number;
+        maxH: number;
+        fontFace?: string;
+      }
+    ) {
       const lines = opts.code.split("\n");
       const panelH = Math.min(opts.maxH, lines.length * 0.225 + 0.34);
       slide.addShape(shapeType.roundRect, {
@@ -333,27 +335,30 @@ export function createCustomSlideHelpers(options: {
         line: { color: C.ink, width: 0 },
         rectRadius: 0.06
       });
-      slide.addText(lines.map((line, index) => {
-        const trimmed = line.trimStart();
-        const isComment = trimmed.startsWith("//") || trimmed.startsWith("#");
-        return {
-          text: line === "" ? " " : line,
-          options: {
-            color: isComment ? C.accent : C.white,
-            breakLine: index < lines.length - 1
-          }
-        };
-      }), {
-        x: opts.x + 0.22,
-        y: opts.y + 0.14,
-        w: opts.w - 0.44,
-        h: panelH - 0.28,
-        fontSize: 10.5,
-        fontFace: opts.fontFace ?? FONTS.mono,
-        lineSpacingMultiple: 1.18,
-        valign: "top",
-        margin: 0
-      });
+      slide.addText(
+        lines.map((line, index) => {
+          const trimmed = line.trimStart();
+          const isComment = trimmed.startsWith("//") || trimmed.startsWith("#");
+          return {
+            text: line === "" ? " " : line,
+            options: {
+              color: isComment ? C.accent : C.white,
+              breakLine: index < lines.length - 1
+            }
+          };
+        }),
+        {
+          x: opts.x + 0.22,
+          y: opts.y + 0.14,
+          w: opts.w - 0.44,
+          h: panelH - 0.28,
+          fontSize: 10.5,
+          fontFace: opts.fontFace ?? FONTS.mono,
+          lineSpacingMultiple: 1.18,
+          valign: "top",
+          margin: 0
+        }
+      );
     }
   };
 }

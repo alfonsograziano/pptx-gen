@@ -11,7 +11,7 @@ import { PptxPackage } from "./pptx-package.js";
 import { getSlideEntries } from "./ooxml.js";
 import { STARTER_TEMPLATES } from "./test-fixtures.js";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const _HERE = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES = STARTER_TEMPLATES;
 
 test("builds a two-slide deck from templates with replaced text", async () => {
@@ -46,9 +46,7 @@ test("builds a two-slide deck from templates with replaced text", async () => {
     const entries = await getSlideEntries(pkg);
     assert.equal(entries.length, 2);
 
-    const allText = (
-      await Promise.all(entries.map((e) => pkg.text(`ppt/slides/slide${e.slideNumber}.xml`)))
-    ).join("");
+    const allText = (await Promise.all(entries.map((e) => pkg.text(`ppt/slides/slide${e.slideNumber}.xml`)))).join("");
     for (const expected of [
       "A practical path to production",
       "From experiments to safe delivery.",
@@ -79,10 +77,7 @@ test("an unknown override target fails the build", async () => {
       variables: { "overline-label": "x" },
       overrides: [{ op: "delete", target: "no-such-shape" }]
     });
-    await assert.rejects(
-      () => deck.render({ output: "deck.pptx", progress: false }),
-      /Invalid override target/
-    );
+    await assert.rejects(() => deck.render({ output: "deck.pptx", progress: false }), /Invalid override target/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -186,7 +181,10 @@ test("a group with a single member is not a variant group", async () => {
     const reportMd = await readFile(path.join(dir, "report.md"), "utf8");
     assert.match(reportMd, /- Variant groups: none/);
     assert.doesNotMatch(reportMd, /Variant group `/);
-    assert.deepEqual(report.warnings.filter((w) => w.code === "variant-group-split"), []);
+    assert.deepEqual(
+      report.warnings.filter((w) => w.code === "variant-group-split"),
+      []
+    );
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

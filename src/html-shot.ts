@@ -153,8 +153,13 @@ async function runUntilPng(bin: string, args: string[], pngPath: string, timeout
 
   let exited = false;
   let spawnError: Error | undefined;
-  child.on("exit", () => { exited = true; });
-  child.on("error", (error) => { spawnError = error; exited = true; });
+  child.on("exit", () => {
+    exited = true;
+  });
+  child.on("error", (error) => {
+    spawnError = error;
+    exited = true;
+  });
 
   try {
     const deadline = Date.now() + timeoutMs;
@@ -182,9 +187,9 @@ async function runUntilPng(bin: string, args: string[], pngPath: string, timeout
 }
 
 function isCompletePng(bytes: Buffer): boolean {
-  return bytes.length > 24
-    && bytes.subarray(0, 8).equals(PNG_MAGIC)
-    && bytes.subarray(bytes.length - 12).equals(PNG_IEND);
+  return (
+    bytes.length > 24 && bytes.subarray(0, 8).equals(PNG_MAGIC) && bytes.subarray(bytes.length - 12).equals(PNG_IEND)
+  );
 }
 
 /**

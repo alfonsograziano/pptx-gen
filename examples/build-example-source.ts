@@ -21,16 +21,35 @@ const titleSlide = new CustomSlide({
   background: "dark",
   draw({ slide }) {
     slide.addText("Overline label", {
-      x: LM, y: 1.35, w: CW, h: 0.35,
-      fontSize: 12, fontFace: FONTS.sans, color: C.accent, margin: 0
+      x: LM,
+      y: 1.35,
+      w: CW,
+      h: 0.35,
+      fontSize: 12,
+      fontFace: FONTS.sans,
+      color: C.accent,
+      margin: 0
     });
     slide.addText("Your presentation title goes here", {
-      x: LM, y: 1.75, w: CW, h: 1.4,
-      fontSize: 34, fontFace: FONTS.sans, color: C.white, margin: 0, valign: "top"
+      x: LM,
+      y: 1.75,
+      w: CW,
+      h: 1.4,
+      fontSize: 34,
+      fontFace: FONTS.sans,
+      color: C.white,
+      margin: 0,
+      valign: "top"
     });
     slide.addText("A short subtitle that sets up the story in one line.", {
-      x: LM, y: 3.25, w: CW, h: 0.6,
-      fontSize: 14, fontFace: FONTS.sans, color: C.faint, margin: 0
+      x: LM,
+      y: 3.25,
+      w: CW,
+      h: 0.6,
+      fontSize: 14,
+      fontFace: FONTS.sans,
+      color: C.faint,
+      margin: 0
     });
   }
 });
@@ -41,17 +60,35 @@ const contentSlide = new CustomSlide({
   draw({ slide, helpers }) {
     helpers.addHeader(slide, "Section header");
     slide.addText("A lead statement that frames the three points below.", {
-      x: LM, y: 0.95, w: CW, h: 0.9,
-      fontSize: 18, fontFace: FONTS.serif, color: C.ink, margin: 0, valign: "top"
+      x: LM,
+      y: 0.95,
+      w: CW,
+      h: 0.9,
+      fontSize: 18,
+      fontFace: FONTS.serif,
+      color: C.ink,
+      margin: 0,
+      valign: "top"
     });
-    slide.addText([
-      { text: "First supporting point that backs up the lead.", options: { bullet: true, breakLine: true } },
-      { text: "Second supporting point with a little more detail.", options: { bullet: true, breakLine: true } },
-      { text: "Third supporting point to round out the argument.", options: { bullet: true } }
-    ], {
-      x: LAYOUT.BIL, y: 2.15, w: CW - (LAYOUT.BIL - LM), h: 2.6,
-      fontSize: 12, fontFace: FONTS.sans, color: C.ink, lineSpacingMultiple: LS, margin: 0, valign: "top"
-    });
+    slide.addText(
+      [
+        { text: "First supporting point that backs up the lead.", options: { bullet: true, breakLine: true } },
+        { text: "Second supporting point with a little more detail.", options: { bullet: true, breakLine: true } },
+        { text: "Third supporting point to round out the argument.", options: { bullet: true } }
+      ],
+      {
+        x: LAYOUT.BIL,
+        y: 2.15,
+        w: CW - (LAYOUT.BIL - LM),
+        h: 2.6,
+        fontSize: 12,
+        fontFace: FONTS.sans,
+        color: C.ink,
+        lineSpacingMultiple: LS,
+        margin: 0,
+        valign: "top"
+      }
+    );
     helpers.addFooter(slide, { light: true });
   }
 });
