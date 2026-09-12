@@ -26,6 +26,7 @@ Run `npm run check` before handing work back — there is no CI, so it is the wh
 - `starter/` — what `pptx-gen init` copies into a new workspace. `examples/workspace/` — a real workspace used as the worked example.
 - `skills/` — the four agent skills shipped to *users* of pptx-gen. They are product, not instructions for this repo.
 - `assets/icons/` — 1,900+ Lucide SVGs, vendored. Never hand-edit them.
+- `.claude/skills/` — BMAD (bmm module, v6.12.0), 29 `bmad-*` planning and review skills, installed and tracked. `_bmad/` holds its config; `_bmad/config.toml` is the team's and is committed, `_bmad/config.user.toml` is personal and ignored. Its output lands in `_bmad-output/`, which is not yet tracked either way. Run `bmad-help` if you are not sure which one applies. Do not hand-edit anything under `_bmad/` outside `custom/` — the installer regenerates it.
 
 ## Rules
 
