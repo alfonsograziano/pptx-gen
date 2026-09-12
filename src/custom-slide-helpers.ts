@@ -17,6 +17,12 @@ type ShapeType = {
   rect: string;
   line: string;
   roundRect: string;
+  // pptxgenjs exposes the whole OOXML preset shape set — ellipse, triangle,
+  // chevron and so on. The three above are the ones the helpers themselves
+  // use; the index signature keeps the rest reachable from a custom slide
+  // that legitimately needs one, instead of failing to typecheck over a shape
+  // the renderer supports perfectly well.
+  [name: string]: string;
 };
 
 type TextRun = {

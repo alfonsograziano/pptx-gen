@@ -20,6 +20,9 @@ type Pptx = {
     rect: string;
     line: string;
     roundRect: string;
+    // See the note on ShapeType in custom-slide-helpers.ts: pptxgenjs offers
+    // the full preset shape set, so a custom slide can reach for any of them.
+    [name: string]: string;
   };
   addSlide: () => Slide;
   writeFile: (options: { fileName: string }) => Promise<string>;
