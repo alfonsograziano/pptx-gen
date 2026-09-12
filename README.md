@@ -65,7 +65,8 @@ slides where none does.
 ## Requirements
 
 - **Node.js 20 or newer.** No compile step: the engine runs `.ts` directly via
-  `tsx`.
+  `tsx`. `.nvmrc` names the version this is developed on, so `nvm use` (or fnm,
+  or mise) picks it up in a fresh clone.
 - **Nothing else to produce a `.pptx`.** Building a deck needs no external
   binaries.
 - **LibreOffice (optional).** Only used to render screenshots for review. If it
@@ -85,7 +86,8 @@ update the engine without carrying your decks along, or touching them at all.
 ```bash
 git clone <your-fork-url> pptx-gen
 cd pptx-gen
-npm install
+nvm use          # optional: matches .nvmrc
+npm ci           # installs exactly what package-lock.json pins
 npm link
 ```
 
