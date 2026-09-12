@@ -38,7 +38,15 @@ test("init creates a complete workspace outside the install", async (t) => {
   const root = path.join(await tempDir(t), "decks");
   await cli(["init", root]);
 
-  for (const file of ["pptx-gen.config.yml", "design.yml", "design.md", "customize.md", "package.json", "tsconfig.json", ".gitignore"]) {
+  for (const file of [
+    "pptx-gen.config.yml",
+    "design.yml",
+    "design.md",
+    "customize.md",
+    "package.json",
+    "tsconfig.json",
+    ".gitignore"
+  ]) {
     assert.ok(existsSync(path.join(root, file)), `init should create ${file}`);
   }
   for (const dir of ["templates", "projects", "assets"]) {

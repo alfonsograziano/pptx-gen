@@ -39,9 +39,7 @@ export type AssetResolverOptions = {
 
 export class AssetNotFoundError extends Error {
   constructor(reference: string, searched: string[]) {
-    super(
-      `Icon "${reference}" was not found. Looked in:\n${searched.map((dir) => `  ${dir}`).join("\n")}`
-    );
+    super(`Icon "${reference}" was not found. Looked in:\n${searched.map((dir) => `  ${dir}`).join("\n")}`);
     this.name = "AssetNotFoundError";
   }
 }

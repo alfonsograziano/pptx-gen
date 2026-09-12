@@ -222,7 +222,9 @@ export class FigureRenderer {
     try {
       return await readFile(sourcePath, "utf8");
     } catch {
-      throw new Error(`Figure '${figure.id}' points at '${figure.htmlFile}', which was not found (looked in ${sourcePath}).`);
+      throw new Error(
+        `Figure '${figure.id}' points at '${figure.htmlFile}', which was not found (looked in ${sourcePath}).`
+      );
     }
   }
 
@@ -421,9 +423,5 @@ function round(box: Box): Box {
 }
 
 function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

@@ -36,7 +36,15 @@ export async function ingestTemplate(options: IngestOptions): Promise<string[]> 
   }
 
   const slide = options.slide ?? 1;
-  return [await ingestOneSlide({ source, templateRoot, templateName: options.templateName, slide, totalSlides: slides.length })];
+  return [
+    await ingestOneSlide({
+      source,
+      templateRoot,
+      templateName: options.templateName,
+      slide,
+      totalSlides: slides.length
+    })
+  ];
 }
 
 type IngestOneSlideOptions = {
@@ -92,19 +100,25 @@ async function ingestOneSlide(options: IngestOneSlideOptions): Promise<string> {
   await writeYamlFile(path.join(templateDir, "template.yml"), metadata);
   await writeYamlFile(path.join(templateDir, "fields.yml"), fieldsFile);
   await writeTextFile(path.join(templateDir, "description.md"), descriptionStub(options.templateName));
-  await writeTextFile(path.join(templateDir, "ingestion-report.md"), ingestionReport({
-    source: options.source,
-    slide: options.slide,
-    totalSlides: options.totalSlides,
-    fonts,
-    fieldCount: fields.length,
-    pageNumberField: pageNumberField?.name
-  }));
+  await writeTextFile(
+    path.join(templateDir, "ingestion-report.md"),
+    ingestionReport({
+      source: options.source,
+      slide: options.slide,
+      totalSlides: options.totalSlides,
+      fonts,
+      fieldCount: fields.length,
+      pageNumberField: pageNumberField?.name
+    })
+  );
 
   const warnings: { code: string; message: string }[] = [];
   await renderScreenshots(templatePptx, path.join(templateDir, "screenshots"), warnings);
   if (warnings.length > 0) {
-    await writeTextFile(path.join(templateDir, "screenshot-warnings.md"), warnings.map((warning) => `- ${warning.code}: ${warning.message}`).join("\n"));
+    await writeTextFile(
+      path.join(templateDir, "screenshot-warnings.md"),
+      warnings.map((warning) => `- ${warning.code}: ${warning.message}`).join("\n")
+    );
   }
 
   return options.templateName;
@@ -150,9 +164,11 @@ function ingestionReport(input: {
 - Source slide count: ${input.totalSlides}
 - Text fields: ${input.fieldCount}
 - Fonts: ${input.fonts.length ? input.fonts.join(", ") : "none detected"}
-- Page number: ${input.pageNumberField
-    ? `detected on shape '${input.pageNumberField}', tagged \`role: page-number\` in fields.yml and rendered as a live slide-number field`
-    : "none detected — if this slide does show one, tag its field with `role: page-number` in fields.yml or it will ship frozen"}
+- Page number: ${
+    input.pageNumberField
+      ? `detected on shape '${input.pageNumberField}', tagged \`role: page-number\` in fields.yml and rendered as a live slide-number field`
+      : "none detected — if this slide does show one, tag its field with `role: page-number` in fields.yml or it will ship frozen"
+  }
 - Status: imported
 `;
 }

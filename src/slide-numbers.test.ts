@@ -11,7 +11,7 @@ import { flattenSlideNumberFields, getSlideEntries } from "./ooxml.js";
 import type { BuildWarning, SlideOverride } from "./types.js";
 import { STARTER_TEMPLATES } from "./test-fixtures.js";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const _HERE = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES = STARTER_TEMPLATES;
 
 type SlideShape = "cover" | { custom: string } | { template: string; overrides?: SlideOverride[] };
@@ -36,7 +36,11 @@ function footered(label: string): CustomSlide {
   });
 }
 
-async function buildDeck(dir: string, name: string, shapes: SlideShape[]): Promise<{
+async function buildDeck(
+  dir: string,
+  name: string,
+  shapes: SlideShape[]
+): Promise<{
   output: string;
   warnings: BuildWarning[];
 }> {
@@ -65,17 +69,19 @@ async function buildDeck(dir: string, name: string, shapes: SlideShape[]): Promi
 async function readSlides(output: string): Promise<SlideFacts[]> {
   const pkg = await PptxPackage.load(output);
   const entries = await getSlideEntries(pkg);
-  return Promise.all(entries.map(async (entry) => {
-    const xml = await pkg.text(`ppt/slides/slide${entry.slideNumber}.xml`);
-    return {
-      label: xml.match(/<a:t>(slide-\d+|[A-Z]\w*)<\/a:t>/)?.[1] ?? "?",
-      number: xml.match(/type="slidenum">[\s\S]*?<a:t>([^<]*)<\/a:t>/)?.[1],
-      hidden: /<p:cNvPr\b[^>]*\bhidden="1"/.test(xml),
-      // A run, as opposed to a field, still holding the number the source deck
-      // was exported with.
-      frozenLiteral: /<a:r>(?:(?!<\/a:r>)[\s\S])*?<a:t>2<\/a:t>/.test(xml)
-    };
-  }));
+  return Promise.all(
+    entries.map(async (entry) => {
+      const xml = await pkg.text(`ppt/slides/slide${entry.slideNumber}.xml`);
+      return {
+        label: xml.match(/<a:t>(slide-\d+|[A-Z]\w*)<\/a:t>/)?.[1] ?? "?",
+        number: xml.match(/type="slidenum">[\s\S]*?<a:t>([^<]*)<\/a:t>/)?.[1],
+        hidden: /<p:cNvPr\b[^>]*\bhidden="1"/.test(xml),
+        // A run, as opposed to a field, still holding the number the source deck
+        // was exported with.
+        frozenLiteral: /<a:r>(?:(?!<\/a:r>)[\s\S])*?<a:t>2<\/a:t>/.test(xml)
+      };
+    })
+  );
 }
 
 async function firstSlideNum(output: string): Promise<number> {
@@ -96,16 +102,22 @@ test("page numbers follow deck order, so reordering slides renumbers them", asyn
   const before = await readSlides(normal.output);
   const after = await readSlides(swapped.output);
 
-  assert.deepEqual(before.map((slide) => [slide.label, slide.number]), [
-    ["slide-0", undefined],
-    ["Alpha", "1"],
-    ["Beta", "2"]
-  ]);
-  assert.deepEqual(after.map((slide) => [slide.label, slide.number]), [
-    ["slide-0", undefined],
-    ["Beta", "1"],
-    ["Alpha", "2"]
-  ]);
+  assert.deepEqual(
+    before.map((slide) => [slide.label, slide.number]),
+    [
+      ["slide-0", undefined],
+      ["Alpha", "1"],
+      ["Beta", "2"]
+    ]
+  );
+  assert.deepEqual(
+    after.map((slide) => [slide.label, slide.number]),
+    [
+      ["slide-0", undefined],
+      ["Beta", "1"],
+      ["Alpha", "2"]
+    ]
+  );
 });
 
 test("numbering starts at 1 on the first slide that shows a footer", async (t) => {
@@ -134,11 +146,7 @@ test("a template's baked-in page number is replaced, never shipped", async (t) =
 
   // content-lead-bullets was ingested from slide 2 of the example deck and
   // carries a literal "2" in its footer.
-  const built = await buildDeck(dir, "template", [
-    "cover",
-    { custom: "Alpha" },
-    { template: "content-lead-bullets" }
-  ]);
+  const built = await buildDeck(dir, "template", ["cover", { custom: "Alpha" }, { template: "content-lead-bullets" }]);
   const slides = await readSlides(built.output);
 
   assert.equal(slides[2].number, "2", "the template slide reads its real position");

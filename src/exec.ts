@@ -33,9 +33,7 @@ export async function findExecutable(candidates: string[], envVar?: string): Pro
       const result = await execFileAsync(process.platform === "win32" ? "where" : "which", [candidate]);
       const commandPath = result.stdout.trim().split(/\r?\n/)[0];
       if (commandPath) return commandPath;
-    } catch {
-      continue;
-    }
+    } catch {}
   }
   return undefined;
 }

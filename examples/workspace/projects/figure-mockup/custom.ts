@@ -34,7 +34,11 @@ export function figureMockupSlide(pageNum = 1): CustomSlide {
 
       helpers.addTextBlock(
         slide,
-        [{ text: "Every incident lands in one queue, so the on-call engineer never has to decide where to look first." }],
+        [
+          {
+            text: "Every incident lands in one queue, so the on-call engineer never has to decide where to look first."
+          }
+        ],
         { x: LM, y: 1.95, w: 4.0, h: 0.8 },
         { fontSize: 11, color: colors.muted }
       );

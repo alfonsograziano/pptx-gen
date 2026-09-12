@@ -5,7 +5,7 @@ import { PptxPackage } from "./pptx-package.js";
 import { fitBox, type Box, type Figure, type FigureBox, type FigureFit, type FigureRenderer } from "./figure.js";
 import type { BuildWarning, SlideOverride, TemplateField, TextStyle } from "./types.js";
 import { richTextToPlain } from "./rich-text.js";
-import { asArray, buildXml, escapeXml, parseXml, unescapeXml } from "./xml.js";
+import { asArray, buildXml, escapeXml, parseXml, unescapeXml, type XmlNode } from "./xml.js";
 import { C, FONTS, LAYOUT } from "./design.js";
 import type { AssetResolver } from "./assets.js";
 
@@ -29,13 +29,13 @@ export type SlideEntry = {
 };
 
 export async function getSlideEntries(pkg: PptxPackage): Promise<SlideEntry[]> {
-  const presentation = parseXml<any>(await pkg.text("ppt/presentation.xml"));
-  const rels = parseXml<any>(await pkg.text("ppt/_rels/presentation.xml.rels"));
+  const presentation = parseXml<XmlNode>(await pkg.text("ppt/presentation.xml"));
+  const rels = parseXml<XmlNode>(await pkg.text("ppt/_rels/presentation.xml.rels"));
   const relationships = asArray(rels.Relationships.Relationship);
-  const byId = new Map(relationships.map((rel: any) => [rel["@_Id"], rel]));
+  const byId = new Map(relationships.map((rel: XmlNode) => [rel["@_Id"], rel]));
   const slideIds = asArray(presentation["p:presentation"]["p:sldIdLst"]?.["p:sldId"]);
 
-  return slideIds.map((slideId: any) => {
+  return slideIds.map((slideId: XmlNode) => {
     const relId = slideId["@_r:id"];
     const rel = byId.get(relId);
     if (!rel) throw new Error(`Missing presentation relationship ${relId}`);
@@ -46,42 +46,24 @@ export async function getSlideEntries(pkg: PptxPackage): Promise<SlideEntry[]> {
   });
 }
 
-export async function duplicateSlide(pkg: PptxPackage, sourceSlideNumber: number): Promise<number> {
-  const nextSlideNumber = nextNumber(pkg.files("ppt/slides/"), /slide(\d+)\.xml$/);
-  await pkg.copy(`ppt/slides/slide${sourceSlideNumber}.xml`, `ppt/slides/slide${nextSlideNumber}.xml`);
-  await pkg.copy(`ppt/slides/_rels/slide${sourceSlideNumber}.xml.rels`, `ppt/slides/_rels/slide${nextSlideNumber}.xml.rels`);
-  await addPresentationSlide(pkg, nextSlideNumber);
-  await addSlideContentType(pkg, nextSlideNumber);
-  return nextSlideNumber;
-}
-
 export async function keepOnlySlides(pkg: PptxPackage, slideNumbers: number[]): Promise<void> {
   const keep = new Set(slideNumbers);
   const entries = await getSlideEntries(pkg);
   const keepRelIds = new Set(entries.filter((entry) => keep.has(entry.slideNumber)).map((entry) => entry.relId));
 
-  const presentation = parseXml<any>(await pkg.text("ppt/presentation.xml"));
+  const presentation = parseXml<XmlNode>(await pkg.text("ppt/presentation.xml"));
   const slideIds = asArray(presentation["p:presentation"]["p:sldIdLst"]?.["p:sldId"]);
-  presentation["p:presentation"]["p:sldIdLst"]["p:sldId"] = slideIds.filter((slideId: any) => keepRelIds.has(slideId["@_r:id"]));
+  presentation["p:presentation"]["p:sldIdLst"]["p:sldId"] = slideIds.filter((slideId: XmlNode) =>
+    keepRelIds.has(slideId["@_r:id"])
+  );
   pkg.setText("ppt/presentation.xml", withXmlHeader(buildXml(presentation)));
 
-  const rels = parseXml<any>(await pkg.text("ppt/_rels/presentation.xml.rels"));
+  const rels = parseXml<XmlNode>(await pkg.text("ppt/_rels/presentation.xml.rels"));
   const relationships = asArray(rels.Relationships.Relationship);
-  rels.Relationships.Relationship = relationships.filter((rel: any) => (
-    rel["@_Type"] !== SLIDE_REL_TYPE || keepRelIds.has(rel["@_Id"])
-  ));
+  rels.Relationships.Relationship = relationships.filter(
+    (rel: XmlNode) => rel["@_Type"] !== SLIDE_REL_TYPE || keepRelIds.has(rel["@_Id"])
+  );
   pkg.setText("ppt/_rels/presentation.xml.rels", withXmlHeader(buildXml(rels)));
-}
-
-export async function keepOnlySlideByOrdinal(pkg: PptxPackage, ordinalSlideNumber: number): Promise<number> {
-  const slides = await getSlideEntries(pkg);
-  if (ordinalSlideNumber < 1 || ordinalSlideNumber > slides.length) {
-    throw new Error(`Slide ${ordinalSlideNumber} is out of range. Source has ${slides.length} slide(s).`);
-  }
-
-  const keptSlideNumber = slides[ordinalSlideNumber - 1].slideNumber;
-  await keepOnlySlides(pkg, [keptSlideNumber]);
-  return keptSlideNumber;
 }
 
 /**
@@ -119,9 +101,10 @@ export async function sliceToSingleSlide(pkg: PptxPackage, ordinalSlideNumber: n
   // 4. Remove the kept slide's now-dangling relationship to its notes slide.
   const keptRelsPath = `ppt/slides/_rels/slide${keptSlideNumber}.xml.rels`;
   if (pkg.has(keptRelsPath)) {
-    const rels = parseXml<any>(await pkg.text(keptRelsPath));
-    rels.Relationships.Relationship = asArray(rels.Relationships?.Relationship)
-      .filter((rel: any) => !String(rel["@_Type"]).endsWith("/notesSlide"));
+    const rels = parseXml<XmlNode>(await pkg.text(keptRelsPath));
+    rels.Relationships.Relationship = asArray(rels.Relationships?.Relationship).filter(
+      (rel: XmlNode) => !String(rel["@_Type"]).endsWith("/notesSlide")
+    );
     pkg.setText(keptRelsPath, withXmlHeader(buildXml(rels)));
   }
 
@@ -154,13 +137,17 @@ export async function appendSlideFromPackage(
   warnings: BuildWarning[] = []
 ): Promise<number> {
   const newSlideNumber = nextNumber(targetPkg.files("ppt/slides/"), /slide(\d+)\.xml$/);
-  targetPkg.setBytes(`ppt/slides/slide${newSlideNumber}.xml`, await srcPkg.bytes(`ppt/slides/slide${srcSlideNumber}.xml`));
+  targetPkg.setBytes(
+    `ppt/slides/slide${newSlideNumber}.xml`,
+    await srcPkg.bytes(`ppt/slides/slide${srcSlideNumber}.xml`)
+  );
 
   const srcRelsPath = `ppt/slides/_rels/slide${srcSlideNumber}.xml.rels`;
   if (srcPkg.has(srcRelsPath)) {
-    const rels = parseXml<any>(await srcPkg.text(srcRelsPath));
-    rels.Relationships.Relationship = asArray(rels.Relationships?.Relationship)
-      .filter((rel: any) => !String(rel["@_Type"]).endsWith("/notesSlide"));
+    const rels = parseXml<XmlNode>(await srcPkg.text(srcRelsPath));
+    rels.Relationships.Relationship = asArray(rels.Relationships?.Relationship).filter(
+      (rel: XmlNode) => !String(rel["@_Type"]).endsWith("/notesSlide")
+    );
     for (const rel of asArray(rels.Relationships?.Relationship)) {
       if (String(rel["@_TargetMode"]) === "External") continue;
       const target = String(rel["@_Target"] ?? "");
@@ -183,7 +170,6 @@ export async function appendSlideFromPackage(
         const ext = path.posix.extname(mediaPath).slice(1).toLowerCase();
         if (ext) await addDefaultContentType(targetPkg, ext, mediaContentType(ext));
       } else if (targetPkg.has(resolved)) {
-        continue;
       } else {
         warnings.push({
           code: "missing-slide-dependency",
@@ -218,25 +204,25 @@ export async function mergeEmbeddedFonts(
 ): Promise<void> {
   const present = await getEmbeddedFonts(targetPkg);
 
-  const srcPresentation = parseXml<any>(await srcPkg.text("ppt/presentation.xml"));
+  const srcPresentation = parseXml<XmlNode>(await srcPkg.text("ppt/presentation.xml"));
   const srcList = srcPresentation["p:presentation"]?.["p:embeddedFontLst"];
   const srcFonts = asArray(srcList?.["p:embeddedFont"]);
   if (srcFonts.length === 0) return;
 
-  const srcRels = parseXml<any>(await srcPkg.text("ppt/_rels/presentation.xml.rels"));
+  const srcRels = parseXml<XmlNode>(await srcPkg.text("ppt/_rels/presentation.xml.rels"));
   const srcTargetByRelId = new Map<string, string>();
   for (const rel of asArray(srcRels.Relationships?.Relationship)) {
     srcTargetByRelId.set(String(rel["@_Id"]), String(rel["@_Target"] ?? ""));
   }
 
   const faceTags = ["p:regular", "p:bold", "p:italic", "p:boldItalic"];
-  const additions: any[] = [];
+  const additions: XmlNode[] = [];
 
   for (const embeddedFont of srcFonts) {
     const typeface = embeddedFont["p:font"]?.["@_typeface"];
     if (!typeface || present.has(typeface)) continue;
 
-    const merged: any = { "p:font": { "@_typeface": typeface } };
+    const merged: XmlNode = { "p:font": { "@_typeface": typeface } };
     for (const tag of faceTags) {
       const face = embeddedFont[tag];
       const srcRelId = face?.["@_r:id"];
@@ -267,16 +253,17 @@ export async function mergeEmbeddedFonts(
 
   await addDefaultContentType(targetPkg, "fntdata", "application/x-fontdata");
 
-  const presentation = parseXml<any>(await targetPkg.text("ppt/presentation.xml"));
+  const presentation = parseXml<XmlNode>(await targetPkg.text("ppt/presentation.xml"));
   const root = presentation["p:presentation"];
-  const list = root["p:embeddedFontLst"] ?? (root["p:embeddedFontLst"] = {});
+  root["p:embeddedFontLst"] ??= {};
+  const list = root["p:embeddedFontLst"];
   list["p:embeddedFont"] = [...asArray(list["p:embeddedFont"]), ...additions];
   targetPkg.setText("ppt/presentation.xml", withXmlHeader(buildXml(presentation)));
 }
 
 async function addPresentationRelationship(pkg: PptxPackage, type: string, target: string): Promise<string> {
   const relPath = "ppt/_rels/presentation.xml.rels";
-  const rels = parseXml<any>(await pkg.text(relPath));
+  const rels = parseXml<XmlNode>(await pkg.text(relPath));
   const relationships = asArray(rels.Relationships.Relationship);
   const relId = nextRelId(relationships);
   relationships.push({ "@_Id": relId, "@_Type": type, "@_Target": target });
@@ -291,7 +278,7 @@ async function collectReferencedTargets(pkg: PptxPackage, prefix: string): Promi
   for (const relsPath of pkg.files()) {
     if (!relsPath.endsWith(".rels")) continue;
     const ownerDir = path.posix.dirname(path.posix.dirname(relsPath));
-    const rels = parseXml<any>(await pkg.text(relsPath));
+    const rels = parseXml<XmlNode>(await pkg.text(relsPath));
     for (const rel of asArray(rels.Relationships?.Relationship)) {
       if (String(rel["@_TargetMode"]) === "External") continue;
       const target = String(rel["@_Target"] ?? "");
@@ -304,24 +291,34 @@ async function collectReferencedTargets(pkg: PptxPackage, prefix: string): Promi
 
 /** Remove content-type overrides whose part no longer exists in the package. */
 async function pruneContentTypeOverrides(pkg: PptxPackage): Promise<void> {
-  const contentTypes = parseXml<any>(await pkg.text("[Content_Types].xml"));
-  contentTypes.Types.Override = asArray(contentTypes.Types?.Override)
-    .filter((override: any) => pkg.has(String(override["@_PartName"]).replace(/^\//, "")));
+  const contentTypes = parseXml<XmlNode>(await pkg.text("[Content_Types].xml"));
+  contentTypes.Types.Override = asArray(contentTypes.Types?.Override).filter((override: XmlNode) =>
+    pkg.has(String(override["@_PartName"]).replace(/^\//, ""))
+  );
   pkg.setText("[Content_Types].xml", withXmlHeader(buildXml(contentTypes)));
 }
 
 function mediaContentType(extension: string): string {
   switch (extension) {
     case "jpg":
-    case "jpeg": return "image/jpeg";
-    case "png": return "image/png";
-    case "gif": return "image/gif";
-    case "bmp": return "image/bmp";
-    case "tiff": return "image/tiff";
-    case "svg": return "image/svg+xml";
-    case "emf": return "image/x-emf";
-    case "wmf": return "image/x-wmf";
-    default: return "application/octet-stream";
+    case "jpeg":
+      return "image/jpeg";
+    case "png":
+      return "image/png";
+    case "gif":
+      return "image/gif";
+    case "bmp":
+      return "image/bmp";
+    case "tiff":
+      return "image/tiff";
+    case "svg":
+      return "image/svg+xml";
+    case "emf":
+      return "image/x-emf";
+    case "wmf":
+      return "image/x-wmf";
+    default:
+      return "application/octet-stream";
   }
 }
 
@@ -335,9 +332,7 @@ export async function extractFonts(pkg: PptxPackage, slideNumber?: number): Prom
   }
   // Drop empties, ubiquitous system fonts, and theme-font references like
   // "+mn-lt" / "+mj-ea" (these resolve to the theme, not a real typeface).
-  return [...fonts]
-    .filter((font) => font && !font.startsWith("+") && !["Arial", "Calibri"].includes(font))
-    .sort();
+  return [...fonts].filter((font) => font && !font.startsWith("+") && !["Arial", "Calibri"].includes(font)).sort();
 }
 
 /**
@@ -352,13 +347,15 @@ export async function extractFonts(pkg: PptxPackage, slideNumber?: number): Prom
  * exactly the friction an open tool should avoid. Install missing fonts with
  * `npm run install-fonts` if you want crisp local screenshots.
  */
-export async function validateFonts(pkg: PptxPackage, expectedFonts: string[], warnings: BuildWarning[] = []): Promise<void> {
+export async function validateFonts(
+  pkg: PptxPackage,
+  expectedFonts: string[],
+  warnings: BuildWarning[] = []
+): Promise<void> {
   const embeddedFonts = await getEmbeddedFonts(pkg);
   const embeddedFamilies = new Set([...embeddedFonts].map(baseFontFamily));
   const isAvailable = (font: string): boolean =>
-    embeddedFonts.has(font) ||
-    embeddedFamilies.has(baseFontFamily(font)) ||
-    isLikelySystemFont(font);
+    embeddedFonts.has(font) || embeddedFamilies.has(baseFontFamily(font)) || isLikelySystemFont(font);
   const missing = expectedFonts.filter((font) => !isAvailable(font));
   if (missing.length > 0) {
     warnings.push({
@@ -375,8 +372,20 @@ export async function validateFonts(pkg: PptxPackage, expectedFonts: string[], w
  */
 function baseFontFamily(font: string): string {
   const weights = new Set([
-    "thin", "extralight", "ultralight", "light", "regular", "medium",
-    "semibold", "demibold", "bold", "extrabold", "ultrabold", "black", "heavy", "italic"
+    "thin",
+    "extralight",
+    "ultralight",
+    "light",
+    "regular",
+    "medium",
+    "semibold",
+    "demibold",
+    "bold",
+    "extrabold",
+    "ultrabold",
+    "black",
+    "heavy",
+    "italic"
   ]);
   const words = font.trim().split(/\s+/);
   while (words.length > 1 && weights.has(words[words.length - 1].toLowerCase())) words.pop();
@@ -415,9 +424,9 @@ export async function extractTextFields(pkg: PptxPackage, slideNumber: number): 
 function tagPageNumberField(fields: TemplateField[], slideXml: string): TemplateField[] {
   const index = fields.findIndex((field) => isPageNumberField(slideXml, field));
   if (index === -1) return fields;
-  return fields.map((field, position) => (
+  return fields.map((field, position) =>
     position === index ? { ...field, id: "page-number", role: "page-number" as const } : field
-  ));
+  );
 }
 
 function uniqueFieldId(baseId: string, seen: Map<string, number>): string {
@@ -439,7 +448,12 @@ export async function fillSlideText(
   for (const [id, value] of Object.entries(variables)) {
     const field = fieldsById.get(id);
     if (!field) {
-      warnings.push({ code: "unused-variable", message: `Variable '${id}' does not match a field`, slide: slideNumber, target: id });
+      warnings.push({
+        code: "unused-variable",
+        message: `Variable '${id}' does not match a field`,
+        slide: slideNumber,
+        target: id
+      });
       continue;
     }
     slideXml = replaceShape(slideXml, field, (shapeXml) => replaceShapeText(shapeXml, value));
@@ -470,35 +484,59 @@ export async function applyOverrides(
     if (override.op === "delete") {
       slideXml = removeShape(slideXml, override.target, fields, warnings, slideNumber);
     } else if (override.op === "hide") {
-      slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) => (
-        shapeXml.replace(/<p:cNvPr\b/, "<p:cNvPr hidden=\"1\"")
-      ));
+      slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) =>
+        shapeXml.replace(/<p:cNvPr\b/, '<p:cNvPr hidden="1"')
+      );
     } else if (override.op === "move") {
-      slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) => (
-        shapeXml.replace(/<a:off x="[^"]+" y="[^"]+"\/>/, `<a:off x="${inToEmu(override.x)}" y="${inToEmu(override.y)}"/>`)
-      ));
+      slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) =>
+        shapeXml.replace(
+          /<a:off x="[^"]+" y="[^"]+"\/>/,
+          `<a:off x="${inToEmu(override.x)}" y="${inToEmu(override.y)}"/>`
+        )
+      );
     } else if (override.op === "resize") {
-      slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) => (
-        shapeXml.replace(/<a:ext cx="[^"]+" cy="[^"]+"\/>/, `<a:ext cx="${inToEmu(override.w)}" cy="${inToEmu(override.h)}"/>`)
-      ));
+      slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) =>
+        shapeXml.replace(
+          /<a:ext cx="[^"]+" cy="[^"]+"\/>/,
+          `<a:ext cx="${inToEmu(override.w)}" cy="${inToEmu(override.h)}"/>`
+        )
+      );
     } else if (override.op === "styleText") {
-      slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) => styleShapeText(shapeXml, override));
+      slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) =>
+        styleShapeText(shapeXml, override)
+      );
     } else if (override.op === "addText") {
-      slideXml = insertShape(slideXml, createTextShape(override.id, richTextToPlain(override.text), override.x, override.y, override.w, override.h, override.style));
+      slideXml = insertShape(
+        slideXml,
+        createTextShape(
+          override.id,
+          richTextToPlain(override.text),
+          override.x,
+          override.y,
+          override.w,
+          override.h,
+          override.style
+        )
+      );
     } else if (override.op === "addSvg" || override.op === "addIcon") {
       // addSvg names a file in the deck's own project; addIcon names an icon in
       // the icon libraries. Resolving both against the project dir, as this
       // used to, meant `{ op: "addIcon", icon: "rocket" }` worked on a custom
       // slide and failed on a cloned template slide.
-      const sourcePath = override.op === "addSvg"
-        ? assets.resolveProjectPath(override.path)
-        : assets.resolveIcon(override.icon);
+      const sourcePath =
+        override.op === "addSvg" ? assets.resolveProjectPath(override.path) : assets.resolveIcon(override.icon);
       const relId = await embedImagePart(pkg, slideNumber, await readFile(sourcePath), extensionOf(sourcePath, "svg"));
-      slideXml = insertShape(slideXml, createPictureShape(override.id, relId, override.x, override.y, override.w, override.h));
+      slideXml = insertShape(
+        slideXml,
+        createPictureShape(override.id, relId, override.x, override.y, override.w, override.h)
+      );
     } else if (override.op === "addImage") {
       const sourcePath = assets.resolveProjectPath(override.path);
       const relId = await embedImagePart(pkg, slideNumber, await readFile(sourcePath), extensionOf(sourcePath, "png"));
-      slideXml = insertShape(slideXml, createPictureShape(override.id, relId, override.x, override.y, override.w, override.h));
+      slideXml = insertShape(
+        slideXml,
+        createPictureShape(override.id, relId, override.x, override.y, override.w, override.h)
+      );
     } else if (override.op === "addFigure") {
       const box: Box = { x: override.x, y: override.y, w: override.w, h: override.h };
       const rendered = await renderFigure(ctx, override.figure, { w: box.w, h: box.h });
@@ -508,7 +546,10 @@ export async function applyOverrides(
       } else {
         const relId = await embedImagePart(pkg, slideNumber, await readFile(rendered.pngPath), "png");
         const placed = fitBox(box, rendered.pxWidth, rendered.pxHeight, override.fit ?? "contain");
-        slideXml = insertShape(slideXml, createPictureShape(override.id, relId, placed.x, placed.y, placed.w, placed.h));
+        slideXml = insertShape(
+          slideXml,
+          createPictureShape(override.id, relId, placed.x, placed.y, placed.w, placed.h)
+        );
       }
     } else if (override.op === "replaceFigure") {
       const target = findTargetShape(slideXml, override.target, fields);
@@ -529,16 +570,18 @@ export async function applyOverrides(
       } else {
         const relId = await embedImagePart(pkg, slideNumber, await readFile(rendered.pngPath), "png");
         const aspect = rendered.pxWidth / rendered.pxHeight;
-        slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) => (
+        slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) =>
           swapPicture(shapeXml, relId, aspect, override.fit ?? "contain", override.target, slideNumber)
-        ));
+        );
       }
     } else if (override.op === "replaceImage") {
       const sourcePath = assets.resolveProjectPath(override.path);
       const relId = await embedImagePart(pkg, slideNumber, await readFile(sourcePath), extensionOf(sourcePath, "png"));
       slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) => {
         if (!/<a:blip\b[^>]*\br:embed="/.test(shapeXml)) {
-          throw new Error(`replaceImage target '${override.target}' on slide ${slideNumber} is not an image (no <a:blip>).`);
+          throw new Error(
+            `replaceImage target '${override.target}' on slide ${slideNumber} is not an image (no <a:blip>).`
+          );
         }
         return shapeXml.replace(/(<a:blip\b[^>]*\br:embed=")[^"]*(")/, `$1${relId}$2`);
       });
@@ -563,9 +606,9 @@ export async function validatePackage(filePath: string): Promise<void> {
 export async function convertCustomSlidePageNumber(pkg: PptxPackage, slideNumber: number): Promise<void> {
   const slidePath = `ppt/slides/slide${slideNumber}.xml`;
   const slideXml = await pkg.text(slidePath);
-  const nextXml = slideXml.replace(/<p:sp>[\s\S]*?<\/p:sp>/g, (shapeXml) => (
+  const nextXml = slideXml.replace(/<p:sp>[\s\S]*?<\/p:sp>/g, (shapeXml) =>
     shapeXml.includes(`name="${PAGE_NUMBER_SHAPE_NAME}"`) ? runToSlideNumField(shapeXml) : shapeXml
-  ));
+  );
   if (nextXml !== slideXml) pkg.setText(slidePath, nextXml);
 }
 
@@ -598,10 +641,12 @@ export async function convertTemplatePageNumber(
  */
 export async function applySlideNumbering(pkg: PptxPackage, warnings: BuildWarning[]): Promise<void> {
   const entries = await getSlideEntries(pkg);
-  const slides = await Promise.all(entries.map(async (entry) => ({
-    entry,
-    xml: await pkg.text(`ppt/slides/slide${entry.slideNumber}.xml`)
-  })));
+  const slides = await Promise.all(
+    entries.map(async (entry) => ({
+      entry,
+      xml: await pkg.text(`ppt/slides/slide${entry.slideNumber}.xml`)
+    }))
+  );
 
   const firstNumbered = slides.findIndex((slide) => hasVisibleSlideNumber(slide.xml));
   if (firstNumbered === -1) return;
@@ -715,9 +760,7 @@ function shapeToField(shapeXml: string): TemplateField | undefined {
 }
 
 function getShapeText(shapeXml: string): string {
-  return [...shapeXml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)]
-    .map((match) => unescapeXml(match[1]))
-    .join("");
+  return [...shapeXml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)].map((match) => unescapeXml(match[1])).join("");
 }
 
 function getGeometry(shapeXml: string): Pick<TemplateField, "x" | "y" | "w" | "h"> {
@@ -749,7 +792,7 @@ function replaceTargetShape(
   slideXml: string,
   target: string,
   fields: TemplateField[],
-  warnings: BuildWarning[],
+  _warnings: BuildWarning[],
   slideNumber: number,
   replacer: (shapeXml: string) => string
 ): string {
@@ -765,7 +808,13 @@ function replaceTargetShape(
   return nextXml;
 }
 
-function removeShape(slideXml: string, target: string, fields: TemplateField[], warnings: BuildWarning[], slideNumber: number): string {
+function removeShape(
+  slideXml: string,
+  target: string,
+  fields: TemplateField[],
+  warnings: BuildWarning[],
+  slideNumber: number
+): string {
   return replaceTargetShape(slideXml, target, fields, warnings, slideNumber, () => "");
 }
 
@@ -774,7 +823,9 @@ function shapeMatchesField(shapeXml: string, field: TemplateField): boolean {
 }
 
 function shapeMatchesTarget(shapeXml: string, target: string, fields: TemplateField[]): boolean {
-  const field = fields.find((candidate) => candidate.id === target || candidate.shapeId === target || candidate.name === target);
+  const field = fields.find(
+    (candidate) => candidate.id === target || candidate.shapeId === target || candidate.name === target
+  );
   if (field) return shapeMatchesField(shapeXml, field);
   return shapeXml.includes(`id="${target}"`) || shapeXml.includes(`name="${target}"`);
 }
@@ -791,7 +842,13 @@ function replaceParagraphText(paragraphXml: string, value: string): string {
   const runs = paragraphXml.match(/<a:r>[\s\S]*?<\/a:r>/g) ?? [];
   const firstExistingRun = runs[0];
   const lastExistingRun = runs[runs.length - 1];
-  if (value.endsWith("_") && firstExistingRun && lastExistingRun && runs.length >= 2 && getShapeText(lastExistingRun) === "_") {
+  if (
+    value.endsWith("_") &&
+    firstExistingRun &&
+    lastExistingRun &&
+    runs.length >= 2 &&
+    getShapeText(lastExistingRun) === "_"
+  ) {
     const firstRun = setRunText(firstExistingRun, value.slice(0, -1));
     const lastRun = setRunText(lastExistingRun, "_");
     return paragraphXml.replace(/<a:r>[\s\S]*?<\/a:r>(?:\s*<a:r>[\s\S]*?<\/a:r>)*/m, `${firstRun}${lastRun}`);
@@ -809,9 +866,14 @@ function setRunText(runXml: string, value: string): string {
 
 function styleShapeText(shapeXml: string, style: { fontSize?: number; color?: string; fontFace?: string }): string {
   let next = shapeXml;
-  if (style.fontSize) next = next.replace(/<a:rPr\b([^>]*)/g, (match) => setOrReplaceAttr(match, "sz", String(Math.round(style.fontSize! * 100))));
+  const { fontSize } = style;
+  if (fontSize)
+    next = next.replace(/<a:rPr\b([^>]*)/g, (match) =>
+      setOrReplaceAttr(match, "sz", String(Math.round(fontSize * 100)))
+    );
   if (style.fontFace) next = next.replace(/typeface="[^"]+"/g, `typeface="${escapeXml(style.fontFace)}"`);
-  if (style.color) next = next.replace(/<a:srgbClr val="[^"]+"\/>/g, `<a:srgbClr val="${style.color.replace(/^#/, "")}"/>`);
+  if (style.color)
+    next = next.replace(/<a:srgbClr val="[^"]+"\/>/g, `<a:srgbClr val="${style.color.replace(/^#/, "")}"/>`);
   return next;
 }
 
@@ -826,8 +888,9 @@ function insertShape(slideXml: string, shapeXml: string): string {
 
 /** The first shape matching `target`, or undefined when nothing matches. */
 function findTargetShape(slideXml: string, target: string, fields: TemplateField[]): string | undefined {
-  return (slideXml.match(/<p:(?:sp|pic)>[\s\S]*?<\/p:(?:sp|pic)>/g) ?? [])
-    .find((shapeXml) => shapeMatchesTarget(shapeXml, target, fields));
+  return (slideXml.match(/<p:(?:sp|pic)>[\s\S]*?<\/p:(?:sp|pic)>/g) ?? []).find((shapeXml) =>
+    shapeMatchesTarget(shapeXml, target, fields)
+  );
 }
 
 /**
@@ -891,7 +954,7 @@ function swapPicture(
   if (!/<a:blip\b[^>]*\br:embed="/.test(shapeXml)) {
     throw new Error(`replaceFigure target '${target}' on slide ${slideNumber} is not an image (no <a:blip>).`);
   }
-  let next = shapeXml
+  const next = shapeXml
     .replace(/(<a:blip\b[^>]*\br:embed=")[^"]*(")/, `$1${relId}$2`)
     .replace(/<a:srcRect\b[^>]*\/>/g, "");
 
@@ -902,9 +965,11 @@ function swapPicture(
 
   // Confine the rewrite to <p:spPr>: in a <p:pic> the <p:blipFill> comes first
   // and can carry offsets of its own that must not be touched.
-  return next.replace(/<p:spPr>[\s\S]*?<\/p:spPr>/, (spPr) => spPr
-    .replace(/<a:off x="[^"]+" y="[^"]+"\/>/, `<a:off x="${inToEmu(placed.x)}" y="${inToEmu(placed.y)}"/>`)
-    .replace(/<a:ext cx="[^"]+" cy="[^"]+"\/>/, `<a:ext cx="${inToEmu(placed.w)}" cy="${inToEmu(placed.h)}"/>`));
+  return next.replace(/<p:spPr>[\s\S]*?<\/p:spPr>/, (spPr) =>
+    spPr
+      .replace(/<a:off x="[^"]+" y="[^"]+"\/>/, `<a:off x="${inToEmu(placed.x)}" y="${inToEmu(placed.y)}"/>`)
+      .replace(/<a:ext cx="[^"]+" cy="[^"]+"\/>/, `<a:ext cx="${inToEmu(placed.w)}" cy="${inToEmu(placed.h)}"/>`)
+  );
 }
 
 /**
@@ -916,18 +981,28 @@ function swapPicture(
  */
 function createPlaceholderShape(id: string, caption: string, box: Box): string {
   const shapeId = nextRuntimeShapeId();
-  return `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="${escapeXml(id)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>`
-    + `<p:spPr><a:xfrm><a:off x="${inToEmu(box.x)}" y="${inToEmu(box.y)}"/><a:ext cx="${inToEmu(box.w)}" cy="${inToEmu(box.h)}"/></a:xfrm>`
-    + `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 4000"/></a:avLst></a:prstGeom>`
-    + `<a:solidFill><a:srgbClr val="${C.grey10}"/></a:solidFill>`
-    + `<a:ln w="12700"><a:solidFill><a:srgbClr val="${C.grey30}"/></a:solidFill><a:prstDash val="dash"/></a:ln></p:spPr>`
-    + `<p:txBody><a:bodyPr wrap="square" anchor="ctr" lIns="182880" rIns="182880"><a:noAutofit/></a:bodyPr><a:lstStyle/>`
-    + `<a:p><a:pPr algn="ctr"><a:buNone/></a:pPr><a:r><a:rPr lang="en" sz="1000" i="1">`
-    + `<a:solidFill><a:srgbClr val="${C.muted}"/></a:solidFill><a:latin typeface="${escapeXml(FONTS.sans)}"/></a:rPr>`
-    + `<a:t>${escapeXml(caption)}</a:t></a:r><a:endParaRPr/></a:p></p:txBody></p:sp>`;
+  return (
+    `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="${escapeXml(id)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+    `<p:spPr><a:xfrm><a:off x="${inToEmu(box.x)}" y="${inToEmu(box.y)}"/><a:ext cx="${inToEmu(box.w)}" cy="${inToEmu(box.h)}"/></a:xfrm>` +
+    `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 4000"/></a:avLst></a:prstGeom>` +
+    `<a:solidFill><a:srgbClr val="${C.grey10}"/></a:solidFill>` +
+    `<a:ln w="12700"><a:solidFill><a:srgbClr val="${C.grey30}"/></a:solidFill><a:prstDash val="dash"/></a:ln></p:spPr>` +
+    `<p:txBody><a:bodyPr wrap="square" anchor="ctr" lIns="182880" rIns="182880"><a:noAutofit/></a:bodyPr><a:lstStyle/>` +
+    `<a:p><a:pPr algn="ctr"><a:buNone/></a:pPr><a:r><a:rPr lang="en" sz="1000" i="1">` +
+    `<a:solidFill><a:srgbClr val="${C.muted}"/></a:solidFill><a:latin typeface="${escapeXml(FONTS.sans)}"/></a:rPr>` +
+    `<a:t>${escapeXml(caption)}</a:t></a:r><a:endParaRPr/></a:p></p:txBody></p:sp>`
+  );
 }
 
-function createTextShape(id: string, text: string, x: number, y: number, w: number, h: number, style: TextStyle = {}): string {
+function createTextShape(
+  id: string,
+  text: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  style: TextStyle = {}
+): string {
   const shapeId = nextRuntimeShapeId();
   const color = (style.color ?? C.ink).replace(/^#/, "");
   return `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="${escapeXml(id)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${inToEmu(x)}" y="${inToEmu(y)}"/><a:ext cx="${inToEmu(w)}" cy="${inToEmu(h)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square"><a:noAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="l"><a:buNone/></a:pPr><a:r><a:rPr lang="en" sz="${Math.round((style.fontSize ?? 10) * 100)}"${style.bold ? ` b="1"` : ""}${style.italic ? ` i="1"` : ""}><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${escapeXml(style.fontFace ?? FONTS.sans)}"/></a:rPr><a:t>${escapeXml(text)}</a:t></a:r><a:endParaRPr/></a:p></p:txBody></p:sp>`;
@@ -939,26 +1014,33 @@ function createPictureShape(id: string, relId: string, x: number, y: number, w: 
 }
 
 async function addPresentationSlide(pkg: PptxPackage, slideNumber: number): Promise<void> {
-  const rels = parseXml<any>(await pkg.text("ppt/_rels/presentation.xml.rels"));
+  const rels = parseXml<XmlNode>(await pkg.text("ppt/_rels/presentation.xml.rels"));
   const relationships = asArray(rels.Relationships.Relationship);
   const relId = nextRelId(relationships);
   relationships.push({ "@_Id": relId, "@_Type": SLIDE_REL_TYPE, "@_Target": `slides/slide${slideNumber}.xml` });
   rels.Relationships.Relationship = relationships;
   pkg.setText("ppt/_rels/presentation.xml.rels", withXmlHeader(buildXml(rels)));
 
-  const presentation = parseXml<any>(await pkg.text("ppt/presentation.xml"));
+  const presentation = parseXml<XmlNode>(await pkg.text("ppt/presentation.xml"));
   const slideIds = asArray(presentation["p:presentation"]["p:sldIdLst"]?.["p:sldId"]);
-  const maxId = Math.max(255, ...slideIds.map((slideId: any) => Number(slideId["@_id"] ?? 255)));
+  const maxId = Math.max(255, ...slideIds.map((slideId: XmlNode) => Number(slideId["@_id"] ?? 255)));
   slideIds.push({ "@_id": maxId + 1, "@_r:id": relId });
   presentation["p:presentation"]["p:sldIdLst"]["p:sldId"] = slideIds;
   pkg.setText("ppt/presentation.xml", withXmlHeader(buildXml(presentation)));
 }
 
-async function addSlideRelationship(pkg: PptxPackage, slideNumber: number, type: string, target: string): Promise<string> {
+async function addSlideRelationship(
+  pkg: PptxPackage,
+  slideNumber: number,
+  type: string,
+  target: string
+): Promise<string> {
   const relPath = `ppt/slides/_rels/slide${slideNumber}.xml.rels`;
   const rels = pkg.has(relPath)
-    ? parseXml<any>(await pkg.text(relPath))
-    : { Relationships: { "@_xmlns": "http://schemas.openxmlformats.org/package/2006/relationships", Relationship: [] } };
+    ? parseXml<XmlNode>(await pkg.text(relPath))
+    : {
+        Relationships: { "@_xmlns": "http://schemas.openxmlformats.org/package/2006/relationships", Relationship: [] }
+      };
   const relationships = asArray(rels.Relationships.Relationship);
   const relId = nextRelId(relationships);
   relationships.push({ "@_Id": relId, "@_Type": type, "@_Target": target });
@@ -968,10 +1050,10 @@ async function addSlideRelationship(pkg: PptxPackage, slideNumber: number, type:
 }
 
 async function addSlideContentType(pkg: PptxPackage, slideNumber: number): Promise<void> {
-  const contentTypes = parseXml<any>(await pkg.text("[Content_Types].xml"));
+  const contentTypes = parseXml<XmlNode>(await pkg.text("[Content_Types].xml"));
   const overrides = asArray(contentTypes.Types.Override);
   const partName = `/ppt/slides/slide${slideNumber}.xml`;
-  if (!overrides.some((override: any) => override["@_PartName"] === partName)) {
+  if (!overrides.some((override: XmlNode) => override["@_PartName"] === partName)) {
     overrides.push({
       "@_PartName": partName,
       "@_ContentType": "application/vnd.openxmlformats-officedocument.presentationml.slide+xml"
@@ -982,9 +1064,9 @@ async function addSlideContentType(pkg: PptxPackage, slideNumber: number): Promi
 }
 
 async function addDefaultContentType(pkg: PptxPackage, extension: string, contentType: string): Promise<void> {
-  const contentTypes = parseXml<any>(await pkg.text("[Content_Types].xml"));
+  const contentTypes = parseXml<XmlNode>(await pkg.text("[Content_Types].xml"));
   const defaults = asArray(contentTypes.Types.Default);
-  if (!defaults.some((item: any) => item["@_Extension"] === extension)) {
+  if (!defaults.some((item: XmlNode) => item["@_Extension"] === extension)) {
     defaults.push({ "@_Extension": extension, "@_ContentType": contentType });
   }
   contentTypes.Types.Default = defaults;
@@ -999,7 +1081,7 @@ function nextNumber(files: string[], pattern: RegExp): number {
   return Math.max(0, ...numbers) + 1;
 }
 
-function nextRelId(relationships: any[]): string {
+function nextRelId(relationships: XmlNode[]): string {
   const ids = relationships
     .map((rel) => String(rel["@_Id"] ?? "").match(/^rId(\d+)$/)?.[1])
     .filter((value): value is string => Boolean(value))
@@ -1010,7 +1092,9 @@ function nextRelId(relationships: any[]): string {
 async function getEmbeddedFonts(pkg: PptxPackage): Promise<Set<string>> {
   const presentationXml = await pkg.text("ppt/presentation.xml");
   const embedded = new Set<string>();
-  for (const match of presentationXml.matchAll(/<p:embeddedFont>[\s\S]*?<p:font typeface="([^"]+)"\/>[\s\S]*?<\/p:embeddedFont>/g)) {
+  for (const match of presentationXml.matchAll(
+    /<p:embeddedFont>[\s\S]*?<p:font typeface="([^"]+)"\/>[\s\S]*?<\/p:embeddedFont>/g
+  )) {
     embedded.add(match[1]);
   }
   return embedded;
@@ -1049,7 +1133,7 @@ function nextRuntimeShapeId(): number {
 
 let runtimeMediaId = 0;
 
-function nextRuntimeMediaId(): number {
+function _nextRuntimeMediaId(): number {
   runtimeMediaId += 1;
   return runtimeMediaId;
 }
@@ -1089,9 +1173,9 @@ function getRunProperties(runXml: string): string {
 
 /** A slide "shows a number" only if its field sits on a shape `hide` left alone. */
 function hasVisibleSlideNumber(slideXml: string): boolean {
-  return extractShapeBlocks(slideXml).some((shapeXml) => (
-    SLIDE_NUM_FIELD.test(shapeXml) && !/<p:cNvPr\b[^>]*\bhidden="1"/.test(shapeXml)
-  ));
+  return extractShapeBlocks(slideXml).some(
+    (shapeXml) => SLIDE_NUM_FIELD.test(shapeXml) && !/<p:cNvPr\b[^>]*\bhidden="1"/.test(shapeXml)
+  );
 }
 
 function setSlideNumFallback(slideXml: string, value: string): string {
@@ -1102,7 +1186,7 @@ function setSlideNumFallback(slideXml: string, value: string): string {
 }
 
 async function setFirstSlideNum(pkg: PptxPackage, firstSlideNum: number): Promise<void> {
-  const presentation = parseXml<any>(await pkg.text("ppt/presentation.xml"));
+  const presentation = parseXml<XmlNode>(await pkg.text("ppt/presentation.xml"));
   const root = presentation["p:presentation"];
   // 1 is the default, so leave the attribute off rather than writing a no-op.
   if (firstSlideNum === 1) delete root["@_firstSlideNum"];

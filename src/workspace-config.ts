@@ -12,7 +12,7 @@ import YAML from "yaml";
 export const CONFIG_FILENAME = "pptx-gen.config.yml";
 
 /** The config version this install understands. */
-export const CONFIG_VERSION = 1;
+const CONFIG_VERSION = 1;
 
 export type WorkspaceConfig = {
   version: number;
@@ -37,7 +37,7 @@ export const CONFIG_DEFAULTS: Omit<WorkspaceConfig, "version"> = {
 const PATH_KEYS = Object.keys(CONFIG_DEFAULTS) as (keyof typeof CONFIG_DEFAULTS)[];
 const VALID_KEYS = ["version", ...PATH_KEYS];
 
-export class WorkspaceConfigError extends Error {
+class WorkspaceConfigError extends Error {
   constructor(configPath: string, detail: string) {
     super(`${configPath}: ${detail}`);
     this.name = "WorkspaceConfigError";
@@ -45,7 +45,7 @@ export class WorkspaceConfigError extends Error {
 }
 
 /** Expand a leading `~` so a config can point at `~/shared/templates`. */
-export function expandHome(value: string): string {
+function expandHome(value: string): string {
   if (value === "~") return os.homedir();
   if (value.startsWith("~/")) return path.join(os.homedir(), value.slice(2));
   return value;

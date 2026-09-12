@@ -52,7 +52,10 @@ test("an unsupported version says which version this install understands", () =>
 });
 
 test("unparseable YAML is reported with the file path", () => {
-  assert.throws(() => parseWorkspaceConfig("templates: [unclosed\n", CONFIG), /WorkspaceConfigError: \/ws\/pptx-gen\.config\.yml: could not parse YAML/);
+  assert.throws(
+    () => parseWorkspaceConfig("templates: [unclosed\n", CONFIG),
+    /WorkspaceConfigError: \/ws\/pptx-gen\.config\.yml: could not parse YAML/
+  );
 });
 
 test("a top-level list is rejected", () => {

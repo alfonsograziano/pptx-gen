@@ -8,12 +8,7 @@ import { applyDesign, designOrigin } from "./design.js";
 import { readDesignFileSync } from "./design-loader.js";
 import { fixWorkspace, initWorkspace } from "./init.js";
 import { scaffoldProject } from "./scaffold.js";
-import {
-  checkWorkspace,
-  installDir,
-  resolveWorkspaceSync,
-  type Workspace
-} from "./workspace.js";
+import { checkWorkspace, installDir, resolveWorkspaceSync, type Workspace } from "./workspace.js";
 
 const program = new Command();
 
@@ -75,26 +70,32 @@ program
 
     if (options.json) {
       const origin = designOrigin();
-      console.log(JSON.stringify({
-        root: workspace.root,
-        config: workspace.configPath,
-        templates: workspace.templatesDir,
-        projects: workspace.projectsDir,
-        assets: workspace.assetsDir,
-        icons: workspace.iconsDir,
-        bundledIcons: workspace.bundledIconsDir,
-        design: workspace.designPath,
-        designDoc: workspace.designDocPath,
-        customize: workspace.customizePath,
-        designLoadedFrom: "file" in origin ? origin.file : null,
-        customSlideGuide: path.join(workspace.installDir, "custom-template-instructions.md"),
-        figureGuide: path.join(workspace.installDir, "figure-instructions.md"),
-        install: workspace.installDir,
-        engineSpecifier: "pptx-gen",
-        source: workspace.source,
-        ok: problems.length === 0,
-        problems
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            root: workspace.root,
+            config: workspace.configPath,
+            templates: workspace.templatesDir,
+            projects: workspace.projectsDir,
+            assets: workspace.assetsDir,
+            icons: workspace.iconsDir,
+            bundledIcons: workspace.bundledIconsDir,
+            design: workspace.designPath,
+            designDoc: workspace.designDocPath,
+            customize: workspace.customizePath,
+            designLoadedFrom: "file" in origin ? origin.file : null,
+            customSlideGuide: path.join(workspace.installDir, "custom-template-instructions.md"),
+            figureGuide: path.join(workspace.installDir, "figure-instructions.md"),
+            install: workspace.installDir,
+            engineSpecifier: "pptx-gen",
+            source: workspace.source,
+            ok: problems.length === 0,
+            problems
+          },
+          null,
+          2
+        )
+      );
       return;
     }
 

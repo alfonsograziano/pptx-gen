@@ -84,31 +84,58 @@ export function howItWorksSlide(): CustomSlide {
 
       // Cards.
       const cards: Array<{
-        x: number; y: number; w: number; h: number;
-        heading: string; body: string; tone: Tone; icon: string; fill?: string;
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+        heading: string;
+        body: string;
+        tone: Tone;
+        icon: string;
+        fill?: string;
       }> = [
         {
-          ...BRIEF, y: TALL_Y, h: TALL_H, tone: "accent", icon: "sparkles",
+          ...BRIEF,
+          y: TALL_Y,
+          h: TALL_H,
+          tone: "accent",
+          icon: "sparkles",
           heading: "Your brief",
           body: "Describe the deck in plain words. An AI agent, driven by the skills, does the work."
         },
         {
-          ...MODES, y: MODE_TOP_Y, h: MODE_H, tone: "accent3", icon: "copy",
+          ...MODES,
+          y: MODE_TOP_Y,
+          h: MODE_H,
+          tone: "accent3",
+          icon: "copy",
           heading: "Clone & fill",
           body: "Copy a real slide and fill its text — pixel-identical."
         },
         {
-          ...MODES, y: MODE_BOT_Y, h: MODE_H, tone: "accent2", icon: "shapes",
+          ...MODES,
+          y: MODE_BOT_Y,
+          h: MODE_H,
+          tone: "accent2",
+          icon: "shapes",
           heading: "Design from scratch",
           body: "Draw native shapes, text and icons — all editable."
         },
         {
-          ...ENGINE, y: TALL_Y, h: TALL_H, tone: "ink", icon: "cpu",
+          ...ENGINE,
+          y: TALL_Y,
+          h: TALL_H,
+          tone: "ink",
+          icon: "cpu",
           heading: "Engine",
           body: "Assembles slides, embeds fonts, renders previews."
         },
         {
-          ...OUTPUT, y: TALL_Y, h: TALL_H, tone: "accent", icon: "presentation",
+          ...OUTPUT,
+          y: TALL_Y,
+          h: TALL_H,
+          tone: "accent",
+          icon: "presentation",
           heading: "Real .pptx",
           body: "Fully editable. Opens in PowerPoint, Keynote and Google Slides."
         }
@@ -116,7 +143,10 @@ export function howItWorksSlide(): CustomSlide {
 
       for (const card of cards) {
         helpers.addCard(slide, {
-          x: card.x, y: card.y, w: card.w, h: card.h,
+          x: card.x,
+          y: card.y,
+          w: card.w,
+          h: card.h,
           heading: card.heading,
           body: card.body,
           accent: TONES[card.tone],

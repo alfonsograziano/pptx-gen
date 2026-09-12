@@ -21,12 +21,13 @@ const TEMPLATE_ROOT = resolveWorkspaceSync().templatesDir;
 
 // With no arguments, re-extract every template in the library; otherwise only
 // the named ones.
-const names = process.argv.slice(2).length > 0
-  ? process.argv.slice(2)
-  : (await readdir(TEMPLATE_ROOT, { withFileTypes: true }))
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .sort();
+const names =
+  process.argv.slice(2).length > 0
+    ? process.argv.slice(2)
+    : (await readdir(TEMPLATE_ROOT, { withFileTypes: true }))
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort();
 
 let updated = 0;
 let totalImages = 0;

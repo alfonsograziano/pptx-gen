@@ -17,7 +17,6 @@ import { tryResolveWorkspaceSync } from "./workspace.js";
 import type { ColorName, DesignPatch, FontRole, FullDesign, LayoutSpec, LogoRole } from "./design-tokens.js";
 
 export type { ColorName, DesignPatch, FontRole, FullDesign, LayoutSpec, LogoRole } from "./design-tokens.js";
-export { COLOR_NAMES, FONT_ROLES, LAYOUT_KEYS, LOGO_ROLES } from "./design-tokens.js";
 
 export const C: Record<ColorName, string> = {
   // Core pairing: a dark tone for text and dark backgrounds, plus one vivid

@@ -104,7 +104,13 @@ test("an explicit workspace that has no config is an error, never a fallback", a
   await mkdir(empty, { recursive: true });
 
   assert.throws(
-    () => resolveWorkspaceSync({ explicit: empty, cwd: path.join(dir, "real"), entryDir: path.join(dir, "real"), env: NO_ENV }),
+    () =>
+      resolveWorkspaceSync({
+        explicit: empty,
+        cwd: path.join(dir, "real"),
+        entryDir: path.join(dir, "real"),
+        env: NO_ENV
+      }),
     (error: Error) => {
       assert.ok(error instanceof WorkspaceNotFoundError);
       assert.deepEqual(error.searched, [empty]);

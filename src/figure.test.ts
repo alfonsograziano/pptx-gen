@@ -3,7 +3,15 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import os from "node:os";
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
-import { buildFigureHtml, figureHash, fitBox, FigureRenderer, resolveViewport, type Figure, type FigureResult } from "./figure.js";
+import {
+  buildFigureHtml,
+  figureHash,
+  fitBox,
+  FigureRenderer,
+  resolveViewport,
+  type Figure,
+  type FigureResult
+} from "./figure.js";
 import { readPngSize } from "./html-shot.js";
 import { C, FONTS } from "./design.js";
 import type { BuildWarning } from "./types.js";
@@ -193,10 +201,7 @@ test("prune removes superseded figure files and keeps the current ones", async (
 
 test("a figure with no source, or with two, is an authoring error", async (t) => {
   const { figures } = await renderer(t);
-  await assert.rejects(
-    () => figures.render({ id: "empty", caption: "nothing" }),
-    /has no source/
-  );
+  await assert.rejects(() => figures.render({ id: "empty", caption: "nothing" }), /has no source/);
   await assert.rejects(
     () => figures.render({ id: "both", caption: "two", html: "<p/>", htmlFile: "x.html" }),
     /use one/

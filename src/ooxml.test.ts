@@ -6,7 +6,7 @@ import { PptxPackage } from "./pptx-package.js";
 import { extractFonts, extractTextFields, getSlideEntries } from "./ooxml.js";
 import { STARTER_TEMPLATES } from "./test-fixtures.js";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const _HERE = path.dirname(fileURLToPath(import.meta.url));
 const TITLE_TEMPLATE = path.join(STARTER_TEMPLATES, "title-cover", "template.pptx");
 
 test("getSlideEntries finds the single slide in an ingested template", async () => {

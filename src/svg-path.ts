@@ -4,11 +4,22 @@
 // a rasterized image. Curves are flattened to line segments, which keeps the
 // converter small and robust while staying visually smooth at icon scale.
 
-export type Pt = [number, number];
+type Pt = [number, number];
 export type SubPath = { pts: Pt[]; closed: boolean };
 export type ParsedSvg = { vbW: number; vbH: number; subs: SubPath[] };
 
-function sampleCubic(out: Pt[], x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, n = 12): void {
+function sampleCubic(
+  out: Pt[],
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  x3: number,
+  y3: number,
+  n = 12
+): void {
   for (let k = 1; k <= n; k += 1) {
     const t = k / n;
     const mt = 1 - t;
@@ -28,7 +39,19 @@ function sampleQuad(out: Pt[], x0: number, y0: number, x1: number, y1: number, x
   }
 }
 
-function sampleArc(out: Pt[], x0: number, y0: number, rxIn: number, ryIn: number, phiDeg: number, laf: number, sf: number, x: number, y: number, n = 14): void {
+function sampleArc(
+  out: Pt[],
+  x0: number,
+  y0: number,
+  rxIn: number,
+  ryIn: number,
+  phiDeg: number,
+  laf: number,
+  sf: number,
+  x: number,
+  y: number,
+  n = 14
+): void {
   let rx = Math.abs(rxIn);
   let ry = Math.abs(ryIn);
   if (rx === 0 || ry === 0) {
@@ -151,7 +174,12 @@ export function flattenPath(d: string): SubPath[] {
       let nx = num();
       let ny = num();
       if (rel) {
-        x1 += x; y1 += y; x2 += x; y2 += y; nx += x; ny += y;
+        x1 += x;
+        y1 += y;
+        x2 += x;
+        y2 += y;
+        nx += x;
+        ny += y;
       }
       sampleCubic(cur, x, y, x1, y1, x2, y2, nx, ny);
       prevCtrl = [x2, y2];
@@ -163,7 +191,10 @@ export function flattenPath(d: string): SubPath[] {
       let nx = num();
       let ny = num();
       if (rel) {
-        x2 += x; y2 += y; nx += x; ny += y;
+        x2 += x;
+        y2 += y;
+        nx += x;
+        ny += y;
       }
       const reflect: boolean = (prevCmd === "C" || prevCmd === "S") && prevCtrl !== null;
       const x1: number = reflect ? 2 * x - (prevCtrl as Pt)[0] : x;
@@ -178,7 +209,10 @@ export function flattenPath(d: string): SubPath[] {
       let nx = num();
       let ny = num();
       if (rel) {
-        x1 += x; y1 += y; nx += x; ny += y;
+        x1 += x;
+        y1 += y;
+        nx += x;
+        ny += y;
       }
       sampleQuad(cur, x, y, x1, y1, nx, ny);
       prevCtrl = [x1, y1];
@@ -188,7 +222,8 @@ export function flattenPath(d: string): SubPath[] {
       let nx = num();
       let ny = num();
       if (rel) {
-        nx += x; ny += y;
+        nx += x;
+        ny += y;
       }
       const reflect: boolean = (prevCmd === "Q" || prevCmd === "T") && prevCtrl !== null;
       const x1: number = reflect ? 2 * x - (prevCtrl as Pt)[0] : x;
@@ -206,7 +241,8 @@ export function flattenPath(d: string): SubPath[] {
       let nx = num();
       let ny = num();
       if (rel) {
-        nx += x; ny += y;
+        nx += x;
+        ny += y;
       }
       sampleArc(cur, x, y, rx, ry, rot, laf, sf, nx, ny);
       x = nx;
@@ -277,7 +313,13 @@ export function parseSvg(svg: string): ParsedSvg {
     const x2 = attr(m[0], "x2");
     const y2 = attr(m[0], "y2");
     if (x1 !== undefined && y1 !== undefined && x2 !== undefined && y2 !== undefined) {
-      subs.push({ pts: [[x1, y1], [x2, y2]], closed: false });
+      subs.push({
+        pts: [
+          [x1, y1],
+          [x2, y2]
+        ],
+        closed: false
+      });
     }
   }
   for (const m of svg.matchAll(/<rect\b[^>]*>/g)) {
@@ -286,7 +328,16 @@ export function parseSvg(svg: string): ParsedSvg {
     const rw = attr(m[0], "width");
     const rh = attr(m[0], "height");
     if (rw !== undefined && rh !== undefined) {
-      subs.push({ pts: [[rx, ry], [rx + rw, ry], [rx + rw, ry + rh], [rx, ry + rh], [rx, ry]], closed: true });
+      subs.push({
+        pts: [
+          [rx, ry],
+          [rx + rw, ry],
+          [rx + rw, ry + rh],
+          [rx, ry + rh],
+          [rx, ry]
+        ],
+        closed: true
+      });
     }
   }
   for (const m of svg.matchAll(/<(?:polyline|polygon)\b[^>]*\bpoints="([^"]+)"[^>]*>/g)) {
@@ -299,9 +350,7 @@ export function parseSvg(svg: string): ParsedSvg {
   return { vbW, vbH, subs };
 }
 
-type GeomPoint =
-  | { x: number; y: number; moveTo?: boolean }
-  | { close: true };
+type GeomPoint = { x: number; y: number; moveTo?: boolean } | { close: true };
 
 /**
  * Convert parsed SVG subpaths to PptxGenJS custom-geometry points, scaled into a

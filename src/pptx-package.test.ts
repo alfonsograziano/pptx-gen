@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { PptxPackage } from "./pptx-package.js";
 import { STARTER_TEMPLATES } from "./test-fixtures.js";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const _HERE = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATE = path.join(STARTER_TEMPLATES, "title-cover", "template.pptx");
 
 test("load exposes package parts", async () => {

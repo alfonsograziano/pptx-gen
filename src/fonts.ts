@@ -37,7 +37,14 @@ export async function isFontInstalled(family: string): Promise<boolean> {
   if (!needle) return true;
   for (const dir of [userFontDir(), ...systemFontDirs()]) {
     const entries = await readdir(dir).catch(() => []);
-    if (entries.some((entry) => entry.toLowerCase().replace(/[^a-z0-9]/g, "").includes(needle))) {
+    if (
+      entries.some((entry) =>
+        entry
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "")
+          .includes(needle)
+      )
+    ) {
       return true;
     }
   }

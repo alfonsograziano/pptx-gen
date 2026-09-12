@@ -435,8 +435,12 @@ walking up from where you are, then `$PPTX_GEN_WORKSPACE`, then `~/.pptx-gen`.
 Other scripts:
 
 ```bash
+npm run check            # everything below that gates a change: lint, typecheck, tests, dead code
 npm test                 # run the test suite
 npm run build            # typecheck (tsc --noEmit)
+npm run lint             # lint and format check (Biome); `npm run lint:fix` writes the fixes
+npm run format           # format only
+npm run knip             # report unused files, exports and dependencies
 npm run example          # build the example deck in examples/workspace
 npm run install-fonts    # install the design fonts locally (optional)
 npm run show-all-templates

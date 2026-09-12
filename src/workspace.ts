@@ -82,7 +82,7 @@ export function installDir(): string {
 }
 
 /** `~/.pptx-gen`, the fallback workspace when nothing else is configured. */
-export function homeWorkspaceDir(): string {
+function homeWorkspaceDir(): string {
   return path.join(os.homedir(), ".pptx-gen");
 }
 
@@ -264,32 +264,38 @@ export async function checkWorkspace(workspace: Workspace): Promise<WorkspacePro
   return problems;
 }
 
-export function checkEngineLink(workspace: Workspace): WorkspaceProblem[] {
+function checkEngineLink(workspace: Workspace): WorkspaceProblem[] {
   const link = engineLinkPath(workspace.root);
   if (!existsSync(link)) {
-    return [{
-      code: "missing-engine-link",
-      message: `Missing engine link: ${link}. Project scripts that import "pptx-gen" will fail.`,
-      fixable: true
-    }];
+    return [
+      {
+        code: "missing-engine-link",
+        message: `Missing engine link: ${link}. Project scripts that import "pptx-gen" will fail.`,
+        fixable: true
+      }
+    ];
   }
 
   try {
     const target = realpathSync(link);
     const expected = realpathSync(workspace.installDir);
     if (target !== expected) {
-      return [{
-        code: "stale-engine-link",
-        message: `Engine link points at ${target}, but this install is ${expected}.`,
-        fixable: true
-      }];
+      return [
+        {
+          code: "stale-engine-link",
+          message: `Engine link points at ${target}, but this install is ${expected}.`,
+          fixable: true
+        }
+      ];
     }
   } catch (error) {
-    return [{
-      code: "broken-engine-link",
-      message: `Engine link is broken: ${(error as Error).message}`,
-      fixable: true
-    }];
+    return [
+      {
+        code: "broken-engine-link",
+        message: `Engine link is broken: ${(error as Error).message}`,
+        fixable: true
+      }
+    ];
   }
 
   return [];

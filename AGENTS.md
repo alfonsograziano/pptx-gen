@@ -5,14 +5,17 @@ pptx-gen is a TypeScript engine that compiles real, editable `.pptx` decks two w
 ## Commands
 
 ```bash
+npm run check            # the whole gate: lint, typecheck, tests, dead-code scan (~40s)
 npm test                 # 114 tests, node --test over src/**/*.test.ts (~20s)
 npm run build            # typecheck only: tsc --noEmit
+npm run lint             # biome check (lint + format check); npm run lint:fix writes the fixes
+npm run knip             # dead code: unused files, exports and dependencies
 npm run example          # rebuild both example decks in examples/workspace
 npm run self-validate    # end-to-end: ingest a slide, build a deck, check the package
 npx tsx src/cli.ts ...   # the CLI without linking: init, workspace, where, new, doctor, ingest, build, validate
 ```
 
-Run `npm run build && npm test` before handing work back. There is no linter, no formatter and no CI, so those two commands are the whole gate.
+Run `npm run check` before handing work back — there is no CI, so it is the whole gate. Formatting is Biome's, configured in `biome.json` (120 columns, double quotes, no trailing commas); do not hand-format.
 
 ## Layout
 
@@ -30,6 +33,7 @@ Run `npm run build && npm test` before handing work back. There is no linter, no
 - **Design values are data, not code.** They come from the workspace's `design.yml` layered over the defaults in `src/design.ts`. Adding a token means adding a default *and* letting a partial override fall back, so an older `design.yml` keeps working.
 - **Slides stay native.** Everything the engine emits must be a shape, line or text run, because Google Slides cannot edit an embedded image. HTML figures are the one exception and the bar is high — see `custom-template-instructions.md` and `figure-instructions.md`, which are the full contracts for custom slides and figures.
 - **Cloned slides keep their pixels.** Filling a field or applying an override edits the original slide's XML; it never redraws it. A change that makes a cloned slide look different from its source is a bug.
+- **`any` is confined to the XML layer.** `XmlNode` in `src/xml.ts` is the one documented escape hatch, for the tree fast-xml-parser returns. New `any` anywhere else is a lint error, and should be.
 - Generated output is gitignored (`output/screenshots/`, `output/figures/`, `*.pdf`), with one deliberate exception whitelisted in `.gitignore` so the repo browses without a browser installed. Do not commit render artifacts.
 - LibreOffice (screenshots) and Chrome (figures) are optional. Anything that depends on them must degrade to a warning and still produce a deck.
 
