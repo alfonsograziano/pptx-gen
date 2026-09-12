@@ -32,3 +32,43 @@ _bmad/config.user.toml
 # Local git worktrees created by the agent harness. Everything else under
 # .claude/ (installed skills, for instance) is tracked on purpose.
 .claude/worktrees/
+
+# Secrets. The engine reads no credentials today — PPTX_GEN_WORKSPACE,
+# PPTX_GEN_NO_AUTOLOAD and CHROME_PATH are the only variables it looks at, and
+# none is sensitive. These rules are here so that can stop being true safely.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.netrc
+credentials.json
+secrets.json
+
+# Operating system cruft.
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+desktop.ini
+
+# Editor and IDE state. Shared editor config is tracked on purpose.
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs, caches and scratch files.
+*.log
+npm-debug.log*
+.npm/
+.cache/
+coverage/
+*.tsbuildinfo
+.node_repl_history
