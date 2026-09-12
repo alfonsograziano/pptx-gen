@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { AddSlideOptions, BuildReport, BuildWarning, DeckSlide, RenderOptions } from "./types.js";
+import type { AddSlideOptions, BuildReport, BuildReportSlide, BuildWarning, DeckSlide, RenderOptions } from "./types.js";
 import { PptxPackage } from "./pptx-package.js";
 import { appendSlideFromPackage, applyOverrides, applySlideNumbering, convertCustomSlidePageNumber, convertTemplatePageNumber, fillSlideText, flattenSlideNumberFields, getSlideEntries, keepOnlySlides, mergeEmbeddedFonts, validateFonts, validatePackage } from "./ooxml.js";
 import { richTextToPlain } from "./rich-text.js";
@@ -56,10 +56,11 @@ export class Presentation {
 
     const output = path.resolve(this.projectDir, options.output);
     const warnings: BuildWarning[] = [];
+    const listing = buildSlideListing(this.slides, warnings);
     const firstTemplateSlide = this.slides.find((slide) => slide.kind === "template");
 
     if (!firstTemplateSlide) {
-      return this.renderAllCustom(output, options, warnings);
+      return this.renderAllCustom(output, options, warnings, listing);
     }
 
     // Steps: one per slide + validate fonts + save + validate package + screenshots (+ report).
@@ -70,6 +71,10 @@ export class Presentation {
 
     const firstTemplate = await loadTemplate(this.templateRoot, firstTemplateSlide.options.templateName);
     const pkg = await PptxPackage.load(firstTemplate.pptxPath);
+    // The base package doubles as the source for slides reusing the first
+    // template, and it grows as we append. Capture its slides now so a later
+    // reuse still sees the template's own slides rather than the whole deck.
+    const firstTemplateEntries = await getSlideEntries(pkg);
     const clonedSlides: number[] = [];
     const templatesUsed: string[] = [];
     const customSlidesUsed: string[] = [];
@@ -83,7 +88,7 @@ export class Presentation {
       const position = `${index + 1}/${this.slides.length}`;
 
       if (requestedSlide.kind === "custom") {
-        await progress.step(`Slide ${position}  ${requestedSlide.slide.name} ${dimKind("custom")}`, async () => {
+        await progress.step(`Slide ${position}  ${requestedSlide.slide.name} ${dimKind(kindLabel(listing[index]))}`, async () => {
           for (const font of requestedSlide.slide.requiredFonts) requiredFonts.add(font);
 
           const tempPptx = await makeCustomSlideTempPath();
@@ -116,14 +121,15 @@ export class Presentation {
         continue;
       }
 
-      await progress.step(`Slide ${position}  ${requestedSlide.options.templateName} ${dimKind("template")}`, async () => {
+      await progress.step(`Slide ${position}  ${requestedSlide.options.templateName} ${dimKind(kindLabel(listing[index]))}`, async () => {
         const template = requestedSlide.options.templateName === firstTemplate.id
           ? firstTemplate
           : await loadTemplate(this.templateRoot, requestedSlide.options.templateName);
         for (const font of template.metadata.fonts ?? []) requiredFonts.add(font);
 
-        const srcPkg = template.id === firstTemplate.id ? pkg : await PptxPackage.load(template.pptxPath);
-        const srcEntries = await getSlideEntries(srcPkg);
+        const isFirstTemplate = template.id === firstTemplate.id;
+        const srcPkg = isFirstTemplate ? pkg : await PptxPackage.load(template.pptxPath);
+        const srcEntries = isFirstTemplate ? firstTemplateEntries : await getSlideEntries(srcPkg);
         if (srcEntries.length === 0) {
           throw new Error(`Slide ${index + 1} template '${requestedSlide.options.templateName}' contains no slides.`);
         }
@@ -176,6 +182,7 @@ export class Presentation {
       output,
       templatesUsed,
       customSlidesUsed,
+      slides: listing,
       slidesBuilt: this.slides.length,
       warnings,
       screenshots
@@ -218,7 +225,12 @@ export class Presentation {
     }
   }
 
-  private async renderAllCustom(output: string, options: RenderOptions, warnings: BuildWarning[]): Promise<BuildReport> {
+  private async renderAllCustom(
+    output: string,
+    options: RenderOptions,
+    warnings: BuildWarning[],
+    listing: BuildReportSlide[]
+  ): Promise<BuildReport> {
     const customSlides = this.slides.map((slide) => {
       if (slide.kind !== "custom") throw new Error("Unexpected non-custom slide in all-custom render path.");
       return slide.slide;
@@ -272,6 +284,7 @@ export class Presentation {
       output,
       templatesUsed: [],
       customSlidesUsed: customSlides.map((slide) => slide.name),
+      slides: listing,
       slidesBuilt: customSlides.length,
       warnings,
       screenshots
@@ -289,6 +302,101 @@ export class Presentation {
   }
 }
 
+/**
+ * Describe every slide in output order, resolving variant-group membership.
+ *
+ * Slides tagged with the same `group` are alternative takes on one concept, so
+ * the reviewer can compare them and pick one. A group of one is not a variant
+ * set, so its tag is dropped rather than reported as "variant 1 of 1".
+ */
+function buildSlideListing(slides: DeckSlide[], warnings: BuildWarning[]): BuildReportSlide[] {
+  const listing: BuildReportSlide[] = slides.map((slide, index) =>
+    slide.kind === "custom"
+      ? { index: index + 1, kind: "custom", name: slide.slide.name, group: slide.slide.group }
+      : { index: index + 1, kind: "template", name: slide.options.templateName, group: slide.options.group }
+  );
+
+  const positionsByGroup = new Map<string, number[]>();
+  for (const entry of listing) {
+    if (!entry.group) continue;
+    const positions = positionsByGroup.get(entry.group) ?? [];
+    positions.push(entry.index);
+    positionsByGroup.set(entry.group, positions);
+  }
+
+  const seen = new Map<string, number>();
+  for (const entry of listing) {
+    if (!entry.group) continue;
+    const positions = positionsByGroup.get(entry.group)!;
+    if (positions.length < 2) {
+      delete entry.group;
+      continue;
+    }
+    const variant = (seen.get(entry.group) ?? 0) + 1;
+    seen.set(entry.group, variant);
+    entry.variant = variant;
+    entry.variantCount = positions.length;
+  }
+
+  // Variants only read as alternatives when they sit next to each other; a split
+  // group almost always means the build script added an unrelated slide between
+  // them. Warn rather than fail, matching the other build-time warnings.
+  for (const [group, positions] of positionsByGroup) {
+    if (positions.length < 2) continue;
+    const contiguous = positions[positions.length - 1] - positions[0] === positions.length - 1;
+    if (contiguous) continue;
+    warnings.push({
+      code: "variant-group-split",
+      message: `Variant group '${group}' is not consecutive; its slides are at positions ${positions.join(", ")}.`,
+      target: group
+    });
+  }
+
+  return listing;
+}
+
+/** Dim annotation for a slide's progress line, e.g. "custom · agenda 2/3". */
+function kindLabel(entry: BuildReportSlide): string {
+  return entry.group ? `${entry.kind} · ${entry.group} ${entry.variant}/${entry.variantCount}` : entry.kind;
+}
+
+function formatSlidesSection(report: BuildReport): string {
+  // Only pair slides with screenshots when there is one per slide; LibreOffice
+  // may have been missing, in which case the suffix is simply left off.
+  const screenshots = report.screenshots.length === report.slides.length ? report.screenshots : null;
+  const shot = (entry: BuildReportSlide) =>
+    screenshots ? ` — ${path.basename(screenshots[entry.index - 1])}` : "";
+
+  const lines: string[] = [];
+  for (let i = 0; i < report.slides.length; i += 1) {
+    const entry = report.slides[i];
+    if (!entry.group) {
+      lines.push(`- ${entry.index}. ${entry.name} (${entry.kind})${shot(entry)}`);
+      continue;
+    }
+    if (entry.variant === 1) {
+      const last = entry.index + entry.variantCount! - 1;
+      lines.push(
+        `- Variant group \`${entry.group}\` — ${entry.variantCount} variants, slides ${entry.index}-${last}. Pick one:`
+      );
+    }
+    lines.push(
+      `  - ${entry.index}. ${entry.name} (${entry.kind}) — variant ${entry.variant} of ${entry.variantCount}${shot(entry)}`
+    );
+  }
+  return lines.join("\n");
+}
+
+function formatVariantGroups(report: BuildReport): string {
+  const counts = new Map<string, number>();
+  for (const entry of report.slides) {
+    if (!entry.group) continue;
+    counts.set(entry.group, entry.variantCount!);
+  }
+  if (counts.size === 0) return "none";
+  return [...counts].map(([group, count]) => `${group} (${count})`).join(", ");
+}
+
 function formatReport(report: BuildReport): string {
   return `# Build report
 
@@ -297,7 +405,12 @@ function formatReport(report: BuildReport): string {
 - Slides built: ${report.slidesBuilt}
 - Templates used: ${report.templatesUsed.join(", ")}
 - Custom slides used: ${report.customSlidesUsed.length ? report.customSlidesUsed.join(", ") : "none"}
+- Variant groups: ${formatVariantGroups(report)}
 - Screenshots: ${report.screenshots.length ? report.screenshots.join(", ") : "none"}
+
+## Slides
+
+${formatSlidesSection(report)}
 
 ## Warnings
 

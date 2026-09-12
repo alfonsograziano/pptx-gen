@@ -102,7 +102,8 @@ editable `.pptx`.
 
 > Build a 4-slide deck introducing our new payments API to a technical audience.
 > Open with a title slide, then the problem, then how it works, then a call to
-> action. Keep it factual.
+> action. Keep it factual. Give me 3 variants of the "how it works" slide so I
+> can pick a layout.
 
 The agent reads [`design.md`](design.md) for the visual language, picks templates
 where one fits or designs slides from scratch where none does, writes a build
@@ -234,6 +235,43 @@ design tokens (`C`, `FONTS`, `LAYOUT`). Build everything from native objects so 
 stays editable and recolorable in PowerPoint and Google Slides.
 [`custom-template-instructions.md`](custom-template-instructions.md) has the full
 guide and ten worked layouts.
+
+### Variants: several takes on the same slide
+
+Ask for options and you get them side by side. Tag two or more slides with the
+same `group` and they become alternative renderings of one concept:
+
+```ts
+deck.addCustomSlide(agendaTimeline({ group: "agenda" }));
+deck.addCustomSlide(agendaCards({ group: "agenda" }));
+deck.addSlideFromTemplate({ templateName: "content-lead-bullets", group: "agenda", variables: { … } });
+```
+
+Variants are built consecutively, so a two-concept deck whose first concept has
+three variants renders four slides. Each variant is a genuinely different layout
+with its own wording — a card grid wants short labels where a timeline wants
+date-prefixed fragments — while the facts and numbers stay the same.
+
+`output/report.md` lists them together with their screenshot filenames so you can
+compare and choose:
+
+```text
+## Slides
+
+- 1. title-cover (template) — slide-01.png
+- Variant group `agenda` — 3 variants, slides 2-4. Pick one:
+  - 2. content-lead-bullets (template) — variant 1 of 3 — slide-02.png
+  - 3. agenda-cards (custom) — variant 2 of 3 — slide-03.png
+  - 4. agenda-numbered (custom) — variant 3 of 3 — slide-04.png
+- 5. closing (custom) — slide-05.png
+```
+
+The `.pptx` itself carries no variant markers — it is a normal deck. Footers use
+live slide-number fields, so page numbers stay right both in the inflated variant
+deck and after you delete the variants you did not pick.
+
+In practice you never write this by hand: say *"give me 3 variants of the agenda
+slide"* in the brief and the agent designs three different layouts for it.
 
 ### The design system: visual guidance for scratch-built slides
 

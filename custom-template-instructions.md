@@ -80,6 +80,15 @@ await deck.render({
 
 `custom.ts` should export named layout functions. Each function returns one `CustomSlide`.
 
+When a concept needs **variants** — several layouts of the same slide for the
+user to choose from — write one layout function per variant, named for the layout
+rather than the variant number (`agendaTimelineSlide`, `agendaCardsSlide`,
+`agendaNumberedSlide`). Each takes a `group` prop and forwards it to
+`new CustomSlide({ name, group, draw })`; slides sharing a group are listed
+together in the build report. Do not parameterise one function into pretending to
+be several variants — if two variants would share a layout function, they are the
+same layout and one of them needs redesigning.
+
 ## Example 1: simple callout slide
 
 Use this when the slide needs one strong statement plus short support text.
@@ -811,4 +820,5 @@ export function exerciseSlide(input: {
 - **Every part is a native shape, line, text, or vector icon, so it is editable and recolorable in Google Slides.** No diagrams or icons embedded as images, unless it is complex art that cannot be a shape (then it is a deliberate, noted exception).
 - Icons use `addIcon` / `addVectorIcon` (native), not image placement.
 - No random values, current dates, or network calls are used.
+- If the slide is one of several variants, it is a genuinely different layout — not the same layout restyled — and its text is written to suit that layout.
 - Screenshots are inspected after build.

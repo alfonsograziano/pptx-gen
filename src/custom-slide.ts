@@ -47,6 +47,15 @@ export type CustomSlideOptions = {
   name: string;
   background?: "light" | "dark" | { color: string };
   requiredFonts?: string[];
+  /**
+   * Optional variant-group id. Slides sharing a group are alternative
+   * renderings of the same concept, listed together in the build report so the
+   * reviewer can pick one. Variants of a group must be added consecutively.
+   *
+   * Deliberately not exposed on `CustomSlideContext`: a variant is a genuinely
+   * different layout, not one layout branching on its own variant index.
+   */
+  group?: string;
   draw: (context: CustomSlideContext) => void | Promise<void>;
 };
 
@@ -54,11 +63,13 @@ export class CustomSlide {
   readonly name: string;
   readonly background?: CustomSlideOptions["background"];
   readonly requiredFonts: string[];
+  readonly group?: string;
   private readonly drawSlide: CustomSlideOptions["draw"];
 
   constructor(options: CustomSlideOptions) {
     this.name = options.name;
     this.background = options.background;
+    this.group = options.group;
     this.requiredFonts = options.requiredFonts ?? [FONTS.sans];
     this.drawSlide = options.draw;
   }
