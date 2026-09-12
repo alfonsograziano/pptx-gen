@@ -12,7 +12,7 @@ import { getSlideEntries } from "./ooxml.js";
 import { C, FONTS } from "./design.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TEMPLATES = path.resolve(HERE, "..", "templates");
+const TEMPLATES = path.resolve(HERE, "..", "starter", "templates");
 const ASSETS = path.resolve(HERE, "..", "assets");
 const ICONS = path.join(ASSETS, "icons");
 

@@ -33,16 +33,15 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { PptxPackage } from "./pptx-package.js";
 import { extractFonts } from "./ooxml.js";
 import { FONTS } from "./design.js";
 import { userFontDir } from "./fonts.js";
+import { resolveWorkspaceSync } from "./workspace.js";
 
 const execFileAsync = promisify(execFile);
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TEMPLATE_ROOT = path.resolve(HERE, "..", "templates");
+const TEMPLATE_ROOT = resolveWorkspaceSync().templatesDir;
 
 const USER_FONT_DIR = userFontDir();
 

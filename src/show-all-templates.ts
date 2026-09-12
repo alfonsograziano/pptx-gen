@@ -1,8 +1,10 @@
 import { lstat, mkdir, readdir, readlink, rm, symlink } from "node:fs/promises";
 import path from "node:path";
+import { resolveWorkspaceSync } from "./workspace.js";
 
-const templateRoot = path.resolve("templates");
-const previewRoot = path.resolve("templates-preview");
+const workspace = resolveWorkspaceSync();
+const templateRoot = workspace.templatesDir;
+const previewRoot = path.join(workspace.root, "templates-preview");
 
 type Result = {
   created: number;

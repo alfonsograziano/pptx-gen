@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { PptxPackage } from "./pptx-package.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TEMPLATE = path.resolve(HERE, "..", "templates", "title-cover", "template.pptx");
+const TEMPLATE = path.resolve(HERE, "..", "starter", "templates", "title-cover", "template.pptx");
 
 test("load exposes package parts", async () => {
   const pkg = await PptxPackage.load(TEMPLATE);

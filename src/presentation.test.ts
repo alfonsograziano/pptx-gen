@@ -11,7 +11,7 @@ import { PptxPackage } from "./pptx-package.js";
 import { getSlideEntries } from "./ooxml.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TEMPLATES = path.resolve(HERE, "..", "templates");
+const TEMPLATES = path.resolve(HERE, "..", "starter", "templates");
 
 test("builds a two-slide deck from templates with replaced text", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "pptx-build-test-"));

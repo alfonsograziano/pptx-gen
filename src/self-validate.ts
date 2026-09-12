@@ -6,11 +6,11 @@
  *
  *   npm run self-validate
  */
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ingestTemplate, Presentation } from "./index.js";
+import { ingestTemplate, Presentation, resolveWorkspaceSync } from "./index.js";
 import { readYamlFile } from "./fs.js";
 import type { FieldsFile } from "./types.js";
 import { PptxPackage } from "./pptx-package.js";
@@ -24,6 +24,15 @@ const workDir = await mkdtemp(path.join(os.tmpdir(), "pptx-gen-self-validate-"))
 const templateRoot = path.join(workDir, "templates");
 const deckProject = path.join(workDir, "deck");
 
+// The temp dir is a real workspace, so this exercises the same resolution path
+// a user gets rather than a special case.
+await writeFile(
+  path.join(workDir, "pptx-gen.config.yml"),
+  ["version: 1", "templates: templates", "projects: .", `assets: ${path.join(projectRoot, "assets")}`].join("\n"),
+  "utf8"
+);
+const workspace = resolveWorkspaceSync({ explicit: workDir });
+
 try {
   // 1. Ingest one slide from the example source into a fresh template library.
   await ingestTemplate({ source, templateName, slide: 1, templateRoot });
@@ -33,7 +42,7 @@ try {
   if (!titleField) throw new Error("Self-validation fixture did not expose the expected title field.");
 
   // 2. Build a deck: replace the title and add a stamped text box.
-  const deck = new Presentation({ templateLibrary: templateRoot, projectDir: deckProject });
+  const deck = new Presentation({ workspace, projectDir: deckProject });
   deck.addSlideFromTemplate({
     templateName,
     variables: { [titleField.id]: "Validated generation" },
