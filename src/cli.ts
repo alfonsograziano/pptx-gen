@@ -87,6 +87,7 @@ program
         designDoc: workspace.designDocPath,
         designLoadedFrom: "file" in origin ? origin.file : null,
         customSlideGuide: path.join(workspace.installDir, "custom-template-instructions.md"),
+        figureGuide: path.join(workspace.installDir, "figure-instructions.md"),
         install: workspace.installDir,
         engineSpecifier: "pptx-gen",
         source: workspace.source,

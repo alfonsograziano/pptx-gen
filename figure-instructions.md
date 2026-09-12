@@ -108,7 +108,7 @@ what you edit to iterate. The engine writes a copy plus the PNG to
 everything that produced the pictures in it.
 
 ```text
-projects/<deck-id>/
+<projects>/<deck-id>/
   figures/alerts-console.html      <- source, committed
   output/figures/
     alerts-console.html            <- generated copy

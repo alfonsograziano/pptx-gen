@@ -1,10 +1,17 @@
 # Design system
 
-This is the default design system for decks built with pptx-gen. It is a clean,
-neutral starting point. Everything here maps to constants in
-[`src/design.ts`](src/design.ts), which is the code source of truth. Edit both
-together (or run the `customize-design` skill) to make every deck match your own
-brand.
+This is the design system for decks built with pptx-gen — a clean, neutral
+starting point you are meant to change.
+
+The values live in `design.yml`, next to this file in your workspace. That file
+is yours: it belongs to the workspace, not to the pptx-gen install, so updating
+the engine never overwrites your brand. Anything you leave out of it falls back
+to the engine's defaults, which is what keeps it working across updates.
+
+Edit `design.yml` and this document together (or run the `customize-design`
+skill) to make every deck match your brand. Do not edit `src/design.ts` in the
+pptx-gen install: that is shared by every workspace and is overwritten by
+updates.
 
 > **One rule worth keeping: sentence case.** Titles, headings, labels, and
 > buttons read best in sentence case: only the first word and proper nouns are
@@ -15,7 +22,7 @@ brand.
 
 ## Colours
 
-Colours live in `C` in `src/design.ts` as 6-digit hex without a leading `#`.
+Colours live under `colors:` in `design.yml`, as 6-digit hex without a leading `#`.
 
 ### Core
 
@@ -59,7 +66,7 @@ Colours live in `C` in `src/design.ts` as 6-digit hex without a leading `#`.
 
 ## Typography
 
-Font families live in `FONTS` in `src/design.ts`.
+Font families live under `fonts:` in `design.yml`.
 
 | Role | Default | When to use |
 |---|---|---|
@@ -88,7 +95,7 @@ Font families live in `FONTS` in `src/design.ts`.
 
 ## Slide grid
 
-Layout constants live in `LAYOUT` in `src/design.ts`, in inches.
+Layout constants live under `layout:` in `design.yml`, in inches.
 
 | Property | Value |
 |---|---|
@@ -119,8 +126,8 @@ but they give a deck a consistent rhythm.
 
 ## Logos (optional)
 
-Logo file names live in `LOGO_FILES` in `src/design.ts`. Drop PNGs with these
-names into the `assets/` folder to have them appear automatically:
+Logo file names live under `logos:` in `design.yml`. Drop PNGs with these names
+into your workspace's `assets/` folder to have them appear automatically:
 
 | File | Usage |
 |---|---|

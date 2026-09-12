@@ -1,6 +1,11 @@
 # Custom slide instructions
 
-Use this file when no existing template in `templates/` fits the slide intent.
+Use this file when no existing template in the workspace's template library
+fits the slide intent.
+
+All paths below come from `pptx-gen workspace --json`: `templates`, `projects`,
+`designDoc`. Never assume a path relative to the pptx-gen install, and never
+write deck files into it.
 
 Prefer cloned templates first. Use custom slides for layouts that need diagrams, flows, arrows, tables, code panels, architecture maps, timelines, or workshop exercises that are not covered by the template library.
 
@@ -12,7 +17,7 @@ These decks are opened and edited in **Google Slides** as well as PowerPoint. Go
 - **Icons must be native, not images.** Use `helpers.addIcon(...)` (icon library) or `helpers.addVectorIcon(slide, svg, box, { color })` (inline SVG). Both convert the vector to a native custom-geometry shape, so the icon can be recolored in Slides by changing its line colour. Do **not** place icons as PNG/SVG images.
 - **Do not embed what can be a shape.** `helpers.addSvgDiagram(...)` embeds the SVG as an image (Google Slides shows a broken-image placeholder for embedded SVG, so it is not reliably editable anywhere). Reserve it for genuinely complex vector art (gradients, photos, intricate illustrations) that cannot be expressed as shapes. A box-and-arrow architecture diagram is **not** one of these: build it natively.
 
-- **A figure is the one deliberate exception, and it is narrow.** Some content has no native form at all: an app screen, a chart, a rendered document, an illustration. For those, author an HTML file and let the engine rasterize it — see `figure-instructions.md`. This is not a loophole for diagrams, icons, cards, or timelines, all of which have native forms and keep them.
+- **A figure is the one deliberate exception, and it is narrow.** Some content has no native form at all: an app screen, a chart, a rendered document, an illustration. For those, author an HTML file and let the engine rasterize it — see the `figureGuide` file from `pptx-gen workspace --json`. This is not a loophole for diagrams, icons, cards, or timelines, all of which have native forms and keep them.
 
 When in doubt, ask: "If I open this in Google Slides, can I move and recolor each part?" If the answer is no, rebuild it from native shapes — **unless there are no parts.**
 
@@ -20,16 +25,16 @@ When in doubt, ask: "If I open this in Google Slides, can I move and recolor eac
 
 ## Required workflow
 
-1. Read `design.md`.
+1. Read the `designDoc` file (`design.md` in the workspace).
 2. Inspect the template library and confirm no good template fits.
-3. Create `projects/<deck-id>/custom.ts`.
+3. Create `custom.ts` in the deck's project folder.
 4. Keep all custom layout functions in `custom.ts`.
 5. In `build.ts`, call `deck.addCustomSlide(...)`.
 6. Run the normal build command and inspect screenshots.
 
 ## Design rules
 
-See `design.md` for the full system. In short:
+See the workspace's `design.md` for the full system. In short:
 
 - Slide size is 10 x 5.625 inches.
 - Use `LM = 0.75`, `CW = 8.75`, `BIL = 0.95`, `LS = 1.3` (from `LAYOUT`).
@@ -51,7 +56,7 @@ See `design.md` for the full system. In short:
 ## Project shape
 
 ```text
-projects/<deck-id>/
+<projects>/<deck-id>/
   build.ts
   custom.ts
   brief.md
@@ -59,16 +64,20 @@ projects/<deck-id>/
   output/
 ```
 
+`pptx-gen new <deck-id> --custom` creates exactly this.
+
 `build.ts` should stay simple:
 
 ```ts
-import { Presentation } from "../../src/index.js";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { Presentation } from "pptx-gen";
 import { architectureFlowSlide } from "./custom.js";
 
 const deck = new Presentation({
   title: "AI delivery proposal",
-  templateLibrary: "templates",
-  projectDir: "projects/<deck-id>",
+  // The deck's own folder. Templates and assets come from the workspace.
+  projectDir: path.dirname(fileURLToPath(import.meta.url)),
 });
 
 deck.addCustomSlide(architectureFlowSlide({
@@ -98,8 +107,12 @@ same layout and one of them needs redesigning.
 Use this when the slide needs one strong statement plus short support text.
 
 ```ts
-import { CustomSlide, C, LAYOUT } from "../../src/index.js";
+import { CustomSlide, C, LAYOUT } from "pptx-gen";
 
+// Reading the design at top level like this is safe: the workspace's
+// design.yml is applied when the engine module initialises, which always
+// happens before this file's body runs. Do not try to reload a design later —
+// these captured values would not change.
 const { LM, CW, LS } = LAYOUT;
 
 export function calloutSlide(input: {
@@ -653,17 +666,17 @@ export function svgLoopSlide(input: {
 
 For content with no native form at all — a product UI, a chart with a continuous
 axis, a rendered document — author an HTML file and let the engine render it.
-Read `figure-instructions.md` before writing the markup: it lists the brand CSS
+Read the `figureGuide` file before writing the markup: it lists the brand CSS
 variables the engine injects and the rules the HTML must follow.
 
 The figure carries the *picture*; the slide carries the *words*. Never put the
 title or the takeaway inside the figure — a figure bakes in the build machine's
 fonts and its text is unsearchable.
 
-Put the HTML in `projects/<deck-id>/figures/alerts-console.html`, then:
+Put the HTML in the project's `figures/alerts-console.html`, then:
 
 ```ts
-import { CustomSlide, type Figure } from "../../src/index.js";
+import { CustomSlide, type Figure } from "pptx-gen";
 
 const FIGURE_BOX = { x: 5.15, y: 1.62, w: 4.3, h: 2.408 };
 
@@ -870,7 +883,7 @@ export function exerciseSlide(input: {
 ## Diagram guidance
 
 - Build diagrams from native shapes, lines, and text so they stay editable in Google Slides. Do not render a diagram as one SVG/PNG image, and never as a figure — a diagram is all parts.
-- For content you can draw but not with shapes — an app screen, a chart, a rendered document — author an HTML **figure** (`figure-instructions.md`). For real-world imagery only the user has (a photo, a real product screenshot, a client logo), do not fake it: drop `helpers.addImagePlaceholder(slide, { x, y, w, h, caption })` — a grey box with a centered italic caption describing what belongs there — so they can supply the asset later. Write a specific caption either way. The difference: a figure is something you can *draw*; a placeholder is something you must be *given*.
+- For content you can draw but not with shapes — an app screen, a chart, a rendered document — author an HTML **figure** (see the `figureGuide` file). For real-world imagery only the user has (a photo, a real product screenshot, a client logo), do not fake it: drop `helpers.addImagePlaceholder(slide, { x, y, w, h, caption })` — a grey box with a centered italic caption describing what belongs there — so they can supply the asset later. Write a specific caption either way. The difference: a figure is something you can *draw*; a placeholder is something you must be *given*.
 - Use `addVectorIcon` / `addIcon` for icons (native custom geometry), never icons-as-images.
 - Use boxes for systems, services, actors, or steps.
 - Use arrows for data flow, control flow, or sequence.
