@@ -76,6 +76,12 @@ export type AddSlideOptions = {
   templateName: string;
   variables?: SlideVariables;
   overrides?: SlideOverride[];
+  /**
+   * Optional variant-group id. Slides sharing a group are alternative
+   * renderings of the same concept, listed together in the build report so the
+   * reviewer can pick one. Variants of a group must be added consecutively.
+   */
+  group?: string;
 };
 
 export type TemplateDeckSlide = {
@@ -105,11 +111,27 @@ export type BuildWarning = {
   target?: string;
 };
 
+export type BuildReportSlide = {
+  /** 1-based position in the output deck. */
+  index: number;
+  kind: "template" | "custom";
+  /** Template id for template slides, the CustomSlide name for custom slides. */
+  name: string;
+  /** Variant-group id, when this slide is one of several variants of a concept. */
+  group?: string;
+  /** 1-based position within the group. Set only when `group` is set. */
+  variant?: number;
+  /** Total slides in this group. Set only when `group` is set. */
+  variantCount?: number;
+};
+
 export type BuildReport = {
   generatedAt: string;
   output: string;
   templatesUsed: string[];
   customSlidesUsed: string[];
+  /** Every slide in output order, with variant-group membership. */
+  slides: BuildReportSlide[];
   slidesBuilt: number;
   warnings: BuildWarning[];
   screenshots: string[];

@@ -8,6 +8,7 @@ export { createCustomSlideHelpers } from "./custom-slide-helpers.js";
 export type {
   AddSlideOptions,
   BuildReport,
+  BuildReportSlide,
   BuildWarning,
   CustomDeckSlide,
   DeckSlide,

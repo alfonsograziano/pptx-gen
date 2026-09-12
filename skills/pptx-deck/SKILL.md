@@ -193,6 +193,63 @@ Rules:
 - **The user steers this.** If they ask for more or fewer images, or to turn
   placeholders off entirely, follow that. When in doubt, prefer fewer.
 
+### 4c. Slide variants
+
+Sometimes the brief asks for **options**: several takes on the same slide so the
+user can pick a layout. Treat any request for *variants / options / alternatives
+/ "a few ways" / "let me choose"* on a named slide or concept as a variant
+request — for example *"give me 3 variants of the agenda slide"*.
+
+Variants of a concept are built as consecutive slides, so a deck of two concepts
+where the first has three variants renders **four** slides.
+
+**How many.** Two to four per concept; use three when the brief says "a few" or
+gives no number. Never more than four — past that the reviewer skims instead of
+comparing. If the brief wants variants on more than three concepts, build them
+for the highest-value ones and leave the rest as TODOs in `brief.md`. If it asks
+for variants of the whole deck, narrow it to specific slides and say so: a fully
+duplicated deck is not reviewable.
+
+**Each variant is a genuinely different layout.** Write one named layout function
+per variant in `custom.ts` — a timeline, a card grid, a numbered list, a
+two-column split with an image placeholder. These do **not** count as variants: a
+changed font size, a different accent colour, reordered bullets, the same layout
+on a different background, or one function called with different props. If two
+variants would share a layout function, they are not variants — redesign one.
+
+**Rewrite the text for each variant.** The concept is fixed — same message, same
+facts, same numbers — but the wording is not. A card grid wants three-to-five
+word labels; a lead-plus-bullets layout wants a full-sentence lead; a timeline
+wants date-prefixed fragments. Copying identical text into every variant produces
+layouts that fit badly. Never change facts, claims, or numbers between variants;
+only phrasing and density.
+
+**Group and name them.** Tag every variant of a concept with the same `group` —
+a short kebab-case name for the concept, not for the layout:
+
+```ts
+deck.addCustomSlide(agendaTimelineSlide({ group: "agenda", ... }));
+deck.addCustomSlide(agendaCardsSlide({ group: "agenda", ... }));
+deck.addSlideFromTemplate({ templateName: "content-lead-bullets", group: "agenda", variables: { ... } });
+```
+
+Each factory in `custom.ts` passes `group` straight through to
+`new CustomSlide({ name, group, draw })`. Template and custom variants mix freely
+in one group.
+
+Name each `CustomSlide` `<concept>-<layout>` — `agenda-timeline`, `agenda-cards`,
+`agenda-numbered` — not `agenda-v1`. The name is what the reviewer reads in the
+build report, so it should say what the layout *is*.
+
+**Keep a group consecutive.** Add all variants of a concept one after another,
+then move to the next concept. The engine emits a `variant-group-split` warning
+if a group's slides are not contiguous; treat it as a bug in `build.ts`.
+
+**Page numbers take care of themselves.** Footers carry live slide-number fields,
+so a variant build numbers straight through its inflated deck, and the numbers
+renumber on their own once the losing variants are removed. Never pass or
+compute a page number to compensate for variants.
+
 ### 5. Run and self-heal
 
 From the repo root:
@@ -212,6 +269,11 @@ Inspect `output/deck.pptx`, `output/report.md`, and `output/screenshots/*.png`
 (present only if LibreOffice is installed). Warnings are allowed; report them.
 Invalid override targets, missing templates, missing required fields, invalid
 asset paths, and a corrupt PPTX are hard failures.
+
+The report's `## Slides` section lists every slide in deck order and groups any
+variants together with their screenshot filenames. If the deck has variant
+groups, check that each group's variants really do look different, then point the
+user at those screenshots and ask which one they want.
 
 ## Override operations
 
@@ -238,3 +300,10 @@ deck.addSlideFromTemplate({
 Return the absolute path to the final `.pptx`, the report, and the screenshots
 folder; any warnings or limitations; and any facts the user must review before
 using the deck externally.
+
+If the deck contains variants, list each group with its variants and their
+screenshot filenames, say what distinguishes each layout, and ask the user to
+pick one per group. Once they choose, delete the losing `addCustomSlide` /
+`addSlideFromTemplate` calls and their now-unused layout functions in
+`custom.ts`, drop the `group` field from the survivor, and rebuild. Page numbers
+renumber themselves, so nothing else needs touching.

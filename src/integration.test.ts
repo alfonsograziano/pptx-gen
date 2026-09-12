@@ -197,10 +197,25 @@ test("integration: templates + custom slides + every override, verified end-to-e
   );
   assert.deepEqual(unexpected, [], `unexpected warnings: ${JSON.stringify(unexpected, null, 2)}`);
 
+  // Every slide is listed in deck order. This deck uses no variant groups, so
+  // the listing is flat and the report carries no variant markup.
+  assert.deepEqual(
+    report.slides.map((s) => [s.index, s.kind, s.name, s.group]),
+    [
+      [1, "template", "title-cover", undefined],
+      [2, "custom", "system-architecture", undefined],
+      [3, "template", "content-lead-bullets", undefined],
+      [4, "custom", "closing", undefined],
+      [5, "template", "content-lead-bullets", undefined]
+    ]
+  );
+
   // The build report was written and mentions the pieces we assembled.
   const reportMd = await readFile(path.join(dir, "report.md"), "utf8");
   assert.match(reportMd, /Slides built: 5/);
   assert.match(reportMd, /system-architecture/);
+  assert.match(reportMd, /- Variant groups: none/);
+  assert.doesNotMatch(reportMd, /Variant group `/);
 
   // ---------------------------------------------------------------------------
   // Reload the deck and inspect slides in presentation order.
