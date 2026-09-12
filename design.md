@@ -110,7 +110,10 @@ but they give a deck a consistent rhythm.
 - **Header.** Content slides open with a header top-left: `sans` 14pt, `ink` on
   light backgrounds and white on dark. Covers and closing slides skip it.
 - **Footer.** A page number bottom-left in `muted` (`sans` 7pt) plus an optional
-  logo mark bottom-right.
+  logo mark bottom-right. The number is a live PowerPoint slide-number field, not
+  text: nobody passes it in, and it stays right when slides are reordered. A deck
+  that opens on an unnumbered cover counts from zero, so the first slide showing a
+  footer reads "1".
 
 ---
 

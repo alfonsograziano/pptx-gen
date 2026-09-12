@@ -152,6 +152,12 @@ Rules:
   `addSvgDiagram` (embeds a non-editable image) for complex art that cannot be
   expressed as shapes, and note it when you use it.
 - Keep custom slide content deterministic and local.
+- **Never pass, compute, or hardcode a page number.** `helpers.addFooter(slide)`
+  takes no number, and no slide function should accept a `pageNum`. The build
+  writes a live PowerPoint slide-number field, so footers stay right when the
+  deck is reordered here or in PowerPoint. The same goes for cloned templates:
+  their page-number field is tagged `role: page-number` and is not a variable to
+  fill.
 - Inspect screenshots for every custom slide when available.
 
 ### 4b. Image placeholders

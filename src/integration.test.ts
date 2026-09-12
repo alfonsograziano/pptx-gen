@@ -76,7 +76,7 @@ test("integration: templates + custom slides + every override, verified end-to-e
       name: "system-architecture",
       background: "dark",
       requiredFonts: [FONTS.sans, FONTS.mono],
-      draw: async ({ slide, helpers, pageNum, design }) => {
+      draw: async ({ slide, helpers, design }) => {
         helpers.addHeader(slide, "System architecture", { light: false });
         helpers.addCodePanel(slide, {
           code: "const total = sum(items)\n// reduce over the batch\nreturn total",
@@ -111,7 +111,7 @@ test("integration: templates + custom slides + every override, verified end-to-e
           ]
         });
         await helpers.addIcon(slide, "rocket", { x: 0.75, y: 4.3, w: 0.5, h: 0.5 }, { color: design.colors.accent });
-        helpers.addFooter(slide, pageNum, { light: false });
+        helpers.addFooter(slide, { light: false });
       }
     })
   );
@@ -125,7 +125,7 @@ test("integration: templates + custom slides + every override, verified end-to-e
       "first-supporting-point-that-backs-up": "Cloned every field\nMerged both kinds of slide\nValidated the package"
     },
     overrides: [
-      { op: "hide", target: "2" },
+      { op: "hide", target: "page-number" },
       { op: "resize", target: "a-lead-statement-that-frames-the-thr", w: 9.0, h: 1.2 },
       { op: "addIcon", id: "star-icon", icon: path.join(ICONS, "star.svg"), x: 8.9, y: 0.3, w: 0.4, h: 0.4 }
     ]

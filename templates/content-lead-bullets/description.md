@@ -7,7 +7,8 @@ A standard content slide: a header, a lead statement, and up to about four bulle
 - Header top-left.
 - A serif lead statement below the header.
 - A single bulleted list (about three to four points) filling the lower half.
-- Page number and optional logo mark in the footer.
+- Page number and optional logo mark in the footer. The number is a live slide
+  number the build manages; it is not a field to fill.
 
 ## When to use
 - A point backed by a few short supporting bullets.

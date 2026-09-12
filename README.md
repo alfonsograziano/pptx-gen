@@ -223,7 +223,7 @@ deck.addCustomSlide(new CustomSlide({
   draw({ slide, helpers }) {
     helpers.addHeader(slide, "One clear idea");    // sentence-case header
     slide.addText("The statement.", { x: LAYOUT.LM, y: 1, w: LAYOUT.CW, h: 1, fontSize: 24, color: C.ink });
-    helpers.addFooter(slide, 2);                   // page number + optional logo
+    helpers.addFooter(slide);                      // page number + optional logo
   },
 }));
 ```

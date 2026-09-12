@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { C, FONTS, LAYOUT, LOGO_FILES } from "./design.js";
+import { PAGE_NUMBER_SHAPE_NAME } from "./ooxml.js";
 import { parseSvg, svgToGeomPoints } from "./svg-path.js";
 
 type Slide = {
@@ -59,12 +60,17 @@ export function createCustomSlideHelpers(options: {
       });
     },
 
-    addFooter(slide: Slide, pageNum: number, opts: { light?: boolean } = {}) {
+    // The number is never passed in: the build rewrites this text box as a live
+    // PowerPoint slide-number field, so it stays right when slides are reordered
+    // here or dragged around in PowerPoint later. The "1" below is only the
+    // fallback the field carries until the build fills in the real position.
+    addFooter(slide: Slide, opts: { light?: boolean } = {}) {
       const light = opts.light ?? true;
       slide.addText([
         { text: "-", options: { breakLine: true } },
-        { text: String(pageNum) }
+        { text: "1" }
       ], {
+        objectName: PAGE_NUMBER_SHAPE_NAME,
         x: 0.5,
         y: 5.1,
         w: 0.35,

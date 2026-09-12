@@ -1,15 +1,24 @@
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PptxPackage } from "./pptx-package.js";
 import type { BuildWarning, SlideOverride, TemplateField, TextStyle } from "./types.js";
 import { richTextToPlain } from "./rich-text.js";
 import { asArray, buildXml, escapeXml, parseXml, unescapeXml } from "./xml.js";
-import { C, FONTS } from "./design.js";
+import { C, FONTS, LAYOUT } from "./design.js";
 
 const EMU_PER_IN = 914400;
 const SLIDE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
 const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
 const FONT_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/font";
+
+/**
+ * Shape name the custom-slide footer helper stamps on its page-number text box,
+ * so the build can find it again and swap the literal for a live field.
+ */
+export const PAGE_NUMBER_SHAPE_NAME = "pptx-gen-page-number";
+
+const SLIDE_NUM_FIELD = /<a:fld\b[^>]*\btype="slidenum"/;
 
 export type SlideEntry = {
   slideNumber: number;
@@ -370,13 +379,29 @@ export async function extractTextFields(pkg: PptxPackage, slideNumber: number): 
   const imageFields = extractPictureBlocks(slideXml)
     .map((picXml) => pictureToField(picXml))
     .filter((field): field is TemplateField => field !== undefined);
-  return [...textFields, ...imageFields].map((field, index) => ({
+  const fields = [...textFields, ...imageFields].map((field, index) => ({
     ...field,
     // Several shapes can derive the same id from similar text (e.g. repeated
     // body copy). Field ids must be unique so each shape is addressable, so
     // collisions get a numeric suffix.
     id: uniqueFieldId(makeFieldId(field, index), seen)
   }));
+  return tagPageNumberField(fields, slideXml);
+}
+
+/**
+ * Tag the slide's page-number shape, so the build can turn it into a live field
+ * instead of shipping whatever number the source deck happened to show. Only the
+ * first match is tagged, and it gets a predictable id — otherwise the id is
+ * slugified from its own text, which leaves templates carrying a field called
+ * "2".
+ */
+function tagPageNumberField(fields: TemplateField[], slideXml: string): TemplateField[] {
+  const index = fields.findIndex((field) => isPageNumberField(slideXml, field));
+  if (index === -1) return fields;
+  return fields.map((field, position) => (
+    position === index ? { ...field, id: "page-number", role: "page-number" as const } : field
+  ));
 }
 
 function uniqueFieldId(baseId: string, seen: Map<string, number>): string {
@@ -470,6 +495,118 @@ export async function validatePackage(filePath: string): Promise<void> {
   await pkg.text("ppt/_rels/presentation.xml.rels");
   const slides = await getSlideEntries(pkg);
   if (slides.length === 0) throw new Error("Output PPTX has no slides");
+}
+
+/**
+ * Swap the literal page number a custom slide drew for a live slide-number
+ * field. Targets the text box `addFooter` named PAGE_NUMBER_SHAPE_NAME.
+ */
+export async function convertCustomSlidePageNumber(pkg: PptxPackage, slideNumber: number): Promise<void> {
+  const slidePath = `ppt/slides/slide${slideNumber}.xml`;
+  const slideXml = await pkg.text(slidePath);
+  const nextXml = slideXml.replace(/<p:sp>[\s\S]*?<\/p:sp>/g, (shapeXml) => (
+    shapeXml.includes(`name="${PAGE_NUMBER_SHAPE_NAME}"`) ? runToSlideNumField(shapeXml) : shapeXml
+  ));
+  if (nextXml !== slideXml) pkg.setText(slidePath, nextXml);
+}
+
+/**
+ * The same swap for a cloned template slide. An ingested deck bakes in whatever
+ * number its source slide happened to carry, and the field tagged `page-number`
+ * in `fields.yml` says which shape that is.
+ */
+export async function convertTemplatePageNumber(
+  pkg: PptxPackage,
+  slideNumber: number,
+  fields: TemplateField[]
+): Promise<void> {
+  const field = fields.find((candidate) => candidate.role === "page-number");
+  if (!field) return;
+  const slidePath = `ppt/slides/slide${slideNumber}.xml`;
+  const slideXml = await pkg.text(slidePath);
+  const nextXml = replaceShape(slideXml, field, runToSlideNumField);
+  if (nextXml !== slideXml) pkg.setText(slidePath, nextXml);
+}
+
+/**
+ * Settle deck-wide numbering once every slide is in its final position.
+ *
+ * PowerPoint renders a `slidenum` field as `firstSlideNum + (position - 1)`, so
+ * to make the first slide that actually shows a footer read "1" the whole deck
+ * shifts back by however many unnumbered slides (a cover, usually) come before
+ * it. The literal inside each field is then rewritten to match, so a renderer
+ * that ignores `<a:fld>` and paints `<a:t>` still shows the right number.
+ */
+export async function applySlideNumbering(pkg: PptxPackage, warnings: BuildWarning[]): Promise<void> {
+  const entries = await getSlideEntries(pkg);
+  const slides = await Promise.all(entries.map(async (entry) => ({
+    entry,
+    xml: await pkg.text(`ppt/slides/slide${entry.slideNumber}.xml`)
+  })));
+
+  const firstNumbered = slides.findIndex((slide) => hasVisibleSlideNumber(slide.xml));
+  if (firstNumbered === -1) return;
+
+  // `firstNumbered` is 0-based, so this is `2 - position`. PowerPoint's own UI
+  // only accepts 0-9999 and negative offsets are not honoured, so clamp.
+  const wanted = 1 - firstNumbered;
+  const firstSlideNum = Math.max(0, wanted);
+  if (firstSlideNum !== wanted) {
+    warnings.push({
+      code: "page-numbering-clamped",
+      message: `${firstNumbered} slides without a page number come before the first numbered slide. PowerPoint cannot count from below zero, so that slide reads '${firstSlideNum + firstNumbered}' rather than '1'.`
+    });
+  }
+
+  await setFirstSlideNum(pkg, firstSlideNum);
+
+  slides.forEach(({ entry, xml }, index) => {
+    if (!SLIDE_NUM_FIELD.test(xml)) return;
+    const nextXml = setSlideNumFallback(xml, String(firstSlideNum + index));
+    if (nextXml !== xml) pkg.setText(`ppt/slides/slide${entry.slideNumber}.xml`, nextXml);
+  });
+}
+
+/**
+ * Turn every slide-number field back into plain text holding the number it
+ * resolves to.
+ *
+ * This is for the screenshot copy only, never the delivered deck. LibreOffice
+ * honours `slidenum` fields but ignores `firstSlideNum`, so a deck that counts
+ * from 0 to skip its cover would preview one number high. Flattening first makes
+ * the preview show exactly what PowerPoint will.
+ */
+export async function flattenSlideNumberFields(pkg: PptxPackage): Promise<void> {
+  for (const entry of await getSlideEntries(pkg)) {
+    const slidePath = `ppt/slides/slide${entry.slideNumber}.xml`;
+    const slideXml = await pkg.text(slidePath);
+    const nextXml = slideXml.replace(
+      /<a:fld\b[^>]*\btype="slidenum"[^>]*>((?:(?!<\/a:fld>)[\s\S])*)<\/a:fld>/g,
+      // A run holds rPr and t but not pPr, which a field is allowed to carry.
+      (_match, children: string) => `<a:r>${children.replace(/<a:pPr\b[^>]*\/>|<a:pPr\b[\s\S]*?<\/a:pPr>/g, "")}</a:r>`
+    );
+    if (nextXml !== slideXml) pkg.setText(slidePath, nextXml);
+  }
+}
+
+/**
+ * Decide whether a field is the slide's page number.
+ *
+ * A deck this tool generated is unambiguous: the shape already holds a
+ * `slidenum` field. Anything else is a guess from shape and content — a small
+ * box in the bottom strip of the slide whose text is nothing but digits.
+ */
+function isPageNumberField(slideXml: string, field: TemplateField): boolean {
+  if (field.type !== "text") return false;
+  const shapeXml = extractShapeBlocks(slideXml).find((candidate) => shapeMatchesField(candidate, field));
+  if (shapeXml && SLIDE_NUM_FIELD.test(shapeXml)) return true;
+
+  const digits = field.originalText.replace(/[^0-9]/g, "");
+  if (!digits || digits.length > 3) return false;
+  if (/[a-z]/i.test(field.originalText)) return false;
+  if (field.w === undefined || field.w > 1) return false;
+  if (field.y === undefined || field.h === undefined) return false;
+  return field.y + field.h > LAYOUT.height * 0.85;
 }
 
 function extractShapeBlocks(slideXml: string): string[] {
@@ -753,4 +890,60 @@ let runtimeMediaId = 0;
 function nextRuntimeMediaId(): number {
   runtimeMediaId += 1;
   return runtimeMediaId;
+}
+
+/**
+ * Rewrite a shape's last text run as a live slide-number field, keeping its
+ * `<a:rPr>` verbatim so the footer holds its size, colour and typeface. The
+ * stock footer is two paragraphs — a dash, then the number — and only the
+ * number becomes a field.
+ */
+function runToSlideNumField(shapeXml: string): string {
+  if (SLIDE_NUM_FIELD.test(shapeXml)) return shapeXml;
+  const runs = [...shapeXml.matchAll(/<a:r>[\s\S]*?<\/a:r>/g)];
+  const lastRun = runs[runs.length - 1];
+  if (!lastRun || lastRun.index === undefined) return shapeXml;
+
+  const runXml = lastRun[0];
+  const text = runXml.match(/<a:t>([\s\S]*?)<\/a:t>/)?.[1] ?? "1";
+  // `<a:fld>` takes its children in the order rPr, pPr, t.
+  const field = `<a:fld id="{${randomUUID().toUpperCase()}}" type="slidenum">${getRunProperties(runXml)}<a:t>${text}</a:t></a:fld>`;
+  return shapeXml.slice(0, lastRun.index) + field + shapeXml.slice(lastRun.index + runXml.length);
+}
+
+/**
+ * Pull a run's `<a:rPr>` out whole. It is self-closing in some exports and a
+ * paired tag wrapping fills and typefaces in others, and a lazy regex would stop
+ * at the first nested `/>`, so the two forms are handled apart.
+ */
+function getRunProperties(runXml: string): string {
+  const open = runXml.match(/<a:rPr\b[^>]*>/);
+  if (!open || open.index === undefined) return "";
+  if (open[0].endsWith("/>")) return open[0];
+  const close = runXml.indexOf("</a:rPr>", open.index);
+  if (close === -1) return open[0].replace(/>$/, "/>");
+  return runXml.slice(open.index, close + "</a:rPr>".length);
+}
+
+/** A slide "shows a number" only if its field sits on a shape `hide` left alone. */
+function hasVisibleSlideNumber(slideXml: string): boolean {
+  return extractShapeBlocks(slideXml).some((shapeXml) => (
+    SLIDE_NUM_FIELD.test(shapeXml) && !/<p:cNvPr\b[^>]*\bhidden="1"/.test(shapeXml)
+  ));
+}
+
+function setSlideNumFallback(slideXml: string, value: string): string {
+  return slideXml.replace(
+    /(<a:fld\b[^>]*\btype="slidenum"[^>]*>(?:(?!<\/a:fld>)[\s\S])*?)<a:t>[\s\S]*?<\/a:t>/g,
+    (_match, head: string) => `${head}<a:t>${escapeXml(value)}</a:t>`
+  );
+}
+
+async function setFirstSlideNum(pkg: PptxPackage, firstSlideNum: number): Promise<void> {
+  const presentation = parseXml<any>(await pkg.text("ppt/presentation.xml"));
+  const root = presentation["p:presentation"];
+  // 1 is the default, so leave the attribute off rather than writing a no-op.
+  if (firstSlideNum === 1) delete root["@_firstSlideNum"];
+  else root["@_firstSlideNum"] = firstSlideNum;
+  pkg.setText("ppt/presentation.xml", withXmlHeader(buildXml(presentation)));
 }
