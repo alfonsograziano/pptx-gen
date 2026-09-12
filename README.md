@@ -65,8 +65,8 @@ slides where none does.
 ## Requirements
 
 - **Node.js 20 or newer.** No compile step: the engine runs `.ts` directly via
-  `tsx`. `.nvmrc` names the version this is developed on, so `nvm use` (or fnm,
-  or mise) picks it up in a fresh clone.
+  `tsx`. `.nvmrc` tracks the current LTS, so `nvm use` (or fnm, or mise) picks a
+  supported runtime up in a fresh clone.
 - **Nothing else to produce a `.pptx`.** Building a deck needs no external
   binaries.
 - **LibreOffice (optional).** Only used to render screenshots for review. If it
