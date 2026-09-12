@@ -190,9 +190,9 @@ Rendering takes about two seconds per figure. The PNG is named by a hash of the
 finished HTML, so unchanged figures are reused on the next build and editing
 `src/design.ts` re-renders all of them.
 
-A worked example lives in `examples/figure-mockup/`. Its two states, rendered and
+A worked example lives in `examples/workspace/projects/figure-mockup/`. Its two states, rendered and
 with no browser installed:
 
 | Rendered | No browser |
 |---|---|
-| ![Rendered](examples/figure-mockup/preview.png) | ![Placeholder](examples/figure-mockup/preview-no-browser.png) |
+| ![Rendered](examples/workspace/projects/figure-mockup/preview.png) | ![Placeholder](examples/workspace/projects/figure-mockup/preview-no-browser.png) |

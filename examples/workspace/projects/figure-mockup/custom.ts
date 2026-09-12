@@ -1,4 +1,4 @@
-import { CustomSlide, type Figure } from "../../src/index.js";
+import { CustomSlide, type Figure } from "pptx-gen";
 
 // A figure beside native text. The product UI on the right is an HTML figure,
 // because a mocked-up app screen has no parts a reader would want to click and

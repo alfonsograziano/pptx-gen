@@ -10,10 +10,11 @@ import { CustomSlide } from "./custom-slide.js";
 import { PptxPackage } from "./pptx-package.js";
 import { getSlideEntries } from "./ooxml.js";
 import { C, FONTS } from "./design.js";
+import { BUNDLED_ASSETS, STARTER_TEMPLATES } from "./test-fixtures.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TEMPLATES = path.resolve(HERE, "..", "starter", "templates");
-const ASSETS = path.resolve(HERE, "..", "assets");
+const TEMPLATES = STARTER_TEMPLATES;
+const ASSETS = BUNDLED_ASSETS;
 const ICONS = path.join(ASSETS, "icons");
 
 const EMU_PER_IN = 914400;

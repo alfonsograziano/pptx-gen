@@ -1,6 +1,6 @@
 # Build report
 
-- Generated at: 2026-09-12T14:27:48.790Z
+- Generated at: 2026-09-12T14:47:07.924Z
 - Output: output/how-it-works.pptx
 - Slides built: 1
 - Templates used: 
@@ -11,6 +11,10 @@
 ## Slides
 
 - 1. how-pptx-gen-works (custom) — slide-01.png
+
+## Figures
+
+- None
 
 ## Warnings
 

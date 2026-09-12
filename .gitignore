@@ -20,10 +20,7 @@ examples/**/*.pdf
 # browsable on a machine with no browser installed.
 projects/*/output/figures/
 examples/**/output/figures/
-!examples/figure-mockup/output/figures/
-
-# The build report records absolute paths, so it is machine-specific.
-examples/figure-mockup/output/report.md
+!examples/workspace/projects/figure-mockup/output/figures/
 
 # Intermediate PDFs left next to any rendered screenshots.
 **/screenshots/*.pdf

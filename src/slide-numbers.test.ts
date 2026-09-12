@@ -9,9 +9,10 @@ import { CustomSlide } from "./custom-slide.js";
 import { PptxPackage } from "./pptx-package.js";
 import { flattenSlideNumberFields, getSlideEntries } from "./ooxml.js";
 import type { BuildWarning, SlideOverride } from "./types.js";
+import { STARTER_TEMPLATES } from "./test-fixtures.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TEMPLATES = path.resolve(HERE, "..", "starter", "templates");
+const TEMPLATES = STARTER_TEMPLATES;
 
 type SlideShape = "cover" | { custom: string } | { template: string; overrides?: SlideOverride[] };
 

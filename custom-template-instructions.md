@@ -727,7 +727,7 @@ Rules:
 - Keep the smallest text in the figure at 18px or more at a 1280px viewport; the
   figure is reduced roughly 3.5x on the slide.
 
-A complete worked deck is in `examples/figure-mockup/`.
+A complete worked deck is in `examples/workspace/projects/figure-mockup/`.
 
 ## Example 10: code panel
 

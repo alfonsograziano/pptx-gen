@@ -361,7 +361,7 @@ it cannot be edited in Google Slides. So the rule is narrow — a figure is for
 content with *no parts*. Anything a viewer might want to move or recolor —
 diagrams, icons, cards, timelines — stays native. See
 [`figure-instructions.md`](figure-instructions.md) for the full contract, and
-`examples/figure-mockup/` for a worked example.
+`examples/workspace/projects/figure-mockup/` for a worked example.
 
 Without a browser installed the deck still builds, with a captioned grey box in
 each figure's place and a warning in the report.

@@ -10,14 +10,13 @@
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Presentation } from "../../src/index.js";
+import { Presentation } from "pptx-gen";
 import { figureMockupSlide } from "./custom.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const deck = new Presentation({
   title: "Figures",
-  templateLibrary: "templates",
   projectDir: HERE
 });
 
