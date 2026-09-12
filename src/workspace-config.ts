@@ -21,6 +21,7 @@ export type WorkspaceConfig = {
   assets: string;
   design: string;
   designDoc: string;
+  customize: string;
 };
 
 /** Every field is optional in the file; these fill in the gaps. */
@@ -29,7 +30,8 @@ export const CONFIG_DEFAULTS: Omit<WorkspaceConfig, "version"> = {
   projects: "projects",
   assets: "assets",
   design: "design.yml",
-  designDoc: "design.md"
+  designDoc: "design.md",
+  customize: "customize.md"
 };
 
 const PATH_KEYS = Object.keys(CONFIG_DEFAULTS) as (keyof typeof CONFIG_DEFAULTS)[];

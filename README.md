@@ -105,6 +105,7 @@ npx skills add alfonsograziano/pptx-gen
   pptx-gen.config.yml   which folders hold what
   design.yml            your brand: colours, fonts, grid, logo names
   design.md             the same, written for humans and agents
+  customize.md          your house rules, read by every skill before it acts
   templates/            your slide library (starter templates copied in)
   projects/<deck-id>/   one folder per deck
   assets/               your logos, and any icons you add
@@ -330,6 +331,27 @@ the exact look they were imported with. To retarget the design to your brand, ed
 `design.ts` and `design.md` together (or run the `customize-design` skill), then
 optionally `npm run install-fonts`.
 
+### House rules: `customize.md`
+
+`customize.md` in your workspace is where *your* rules live, as opposed to your
+brand. Every skill reads it before it does anything and follows it over its own
+defaults, so it is the one place to put the things you would otherwise repeat in
+every prompt:
+
+```markdown
+## Rules
+
+- After every build, copy the finished `.pptx` to `~/documents/drive-sync/`.
+- Never use image placeholders; leave the space empty instead.
+```
+
+`init` creates it empty — you are not meant to fill it in up front. It fills
+itself: ask for something that will come up again ("always move the deck to X")
+and the agent writes the rule down for you, so the next deck already knows.
+
+Because it lives in the workspace, each brand or client can have its own rules,
+and an engine update never touches them.
+
 ### Icons
 
 `assets/icons/` holds the Lucide set. Reference an icon by file name in an
@@ -439,6 +461,10 @@ tool end to end from a plain-language request.
   its screenshot or fields.
 - **`customize-design`** — retarget the design system (your workspace's
   `design.yml` + `design.md`) to a brand.
+
+All four read your workspace's [`customize.md`](#house-rules-customizemd) first
+and follow the rules in it over their own defaults — and write new rules into it
+whenever you ask for something that will come up again.
 
 ### Wire them into your agent
 

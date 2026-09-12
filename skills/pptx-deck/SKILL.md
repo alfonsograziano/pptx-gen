@@ -41,6 +41,7 @@ Use the absolute paths it returns. Referred to below as:
 | `assets` / `icons` | logos, and icons the user added |
 | `design` | `design.yml`, the brand tokens |
 | `designDoc` | `design.md`, the brand doc to read |
+| `customize` | `customize.md`, this workspace's house rules |
 | `customSlideGuide` | how to design slides from scratch |
 | `figureGuide` | how to author HTML figures |
 | `engineSpecifier` | what a build script imports (`pptx-gen`) |
@@ -48,6 +49,31 @@ Use the absolute paths it returns. Referred to below as:
 If it fails with "No pptx-gen workspace found", stop and ask the user where
 their workspace is, or offer to create one with `pptx-gen init <dir>`. Do not
 guess, and do not fall back to repo-relative paths.
+
+## Read the workspace customizations first
+
+Every workspace has a `customize.md` — the user's house rules for this
+workspace. Read it (the `customize` path from `pptx-gen workspace --json`)
+before anything else, and follow it.
+
+An empty file is normal: it means this workspace has no house rules yet. When it
+does have rules, **they win over the defaults in this skill**. If a rule and
+this skill genuinely contradict each other, follow the rule and say so in your
+final response.
+
+If the file is missing, run `pptx-gen doctor --fix` to create it.
+
+### Write recurring requests into it, unprompted
+
+When the user asks for something that will plainly come up again — "always move
+the finished deck to X", "never use image placeholders", "our decks always open
+with a disclaimer slide" — do not just do it this once. Add it to `customize.md`
+under `## Rules` as one specific bullet saying what to do and when, then tell the
+user in one line that you saved it so they need not repeat it.
+
+The test is whether the user would otherwise have to say it again next time.
+Instructions scoped to the deck in hand ("make slide 3 red") stay out of the
+file.
 
 ## Read the design system first
 

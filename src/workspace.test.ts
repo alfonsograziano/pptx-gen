@@ -85,7 +85,7 @@ test("config paths resolve against the config file even from a different cwd", a
   const dir = await tempDir(t);
   const root = await makeWorkspace(
     path.join(dir, "decks"),
-    ["version: 1", "templates: ../shared-templates", "design: brand/design.yml"].join("\n")
+    ["version: 1", "templates: ../shared-templates", "design: brand/design.yml", "customize: brand/rules.md"].join("\n")
   );
 
   const workspace = resolveWorkspaceSync({ explicit: root, cwd: os.tmpdir(), entryDir: os.tmpdir(), env: NO_ENV });
@@ -94,6 +94,7 @@ test("config paths resolve against the config file even from a different cwd", a
   assert.equal(workspace.designPath, path.join(root, "brand", "design.yml"));
   assert.equal(workspace.projectsDir, path.join(root, "projects"));
   assert.equal(workspace.iconsDir, path.join(root, "assets", "icons"));
+  assert.equal(workspace.customizePath, path.join(root, "brand", "rules.md"));
 });
 
 test("an explicit workspace that has no config is an error, never a fallback", async (t) => {

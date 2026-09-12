@@ -30,6 +30,8 @@ export type Workspace = {
   iconsDir: string;
   designPath: string;
   designDocPath: string;
+  /** `customize.md` — this workspace's house rules, read by every skill. */
+  customizePath: string;
   /** Where the engine is installed. Never written to. */
   installDir: string;
   /** The Lucide set that ships with the engine, used as an icon fallback. */
@@ -137,6 +139,7 @@ export function loadWorkspace(root: string, source: WorkspaceSource): Workspace 
     iconsDir: path.join(assetsDir, "icons"),
     designPath: resolveFromConfig(configPath, config.design),
     designDocPath: resolveFromConfig(configPath, config.designDoc),
+    customizePath: resolveFromConfig(configPath, config.customize),
     installDir: install,
     bundledIconsDir: path.join(install, "assets", "icons"),
     source
@@ -244,6 +247,14 @@ export async function checkWorkspace(workspace: Workspace): Promise<WorkspacePro
     problems.push({
       code: "missing-design",
       message: `Missing design file: ${workspace.designPath} (the engine defaults are being used)`,
+      fixable: true
+    });
+  }
+
+  if (!existsSync(workspace.customizePath)) {
+    problems.push({
+      code: "missing-customize",
+      message: `Missing customizations file: ${workspace.customizePath} (this workspace has no house rules)`,
       fixable: true
     });
   }

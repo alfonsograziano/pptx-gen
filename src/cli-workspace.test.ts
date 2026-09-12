@@ -38,7 +38,7 @@ test("init creates a complete workspace outside the install", async (t) => {
   const root = path.join(await tempDir(t), "decks");
   await cli(["init", root]);
 
-  for (const file of ["pptx-gen.config.yml", "design.yml", "design.md", "package.json", "tsconfig.json", ".gitignore"]) {
+  for (const file of ["pptx-gen.config.yml", "design.yml", "design.md", "customize.md", "package.json", "tsconfig.json", ".gitignore"]) {
     assert.ok(existsSync(path.join(root, file)), `init should create ${file}`);
   }
   for (const dir of ["templates", "projects", "assets"]) {
@@ -96,6 +96,7 @@ test("workspace --json reports absolute paths and the engine specifier", async (
   assert.equal(info.templates, path.join(root, "templates"));
   assert.equal(info.projects, path.join(root, "projects"));
   assert.equal(info.design, path.join(root, "design.yml"));
+  assert.equal(info.customize, path.join(root, "customize.md"));
   assert.equal(info.install, INSTALL);
   assert.equal(info.bundledIcons, path.join(INSTALL, "assets", "icons"));
   assert.equal(info.engineSpecifier, "pptx-gen");
@@ -122,6 +123,17 @@ test("doctor --fix repairs a broken engine link", async (t) => {
 
   const after = await cli(["doctor", "--workspace", root]);
   assert.match(after.stdout, /Workspace is healthy/);
+});
+
+test("doctor --fix restores a deleted customize.md", async (t) => {
+  const root = path.join(await tempDir(t), "decks");
+  await cli(["init", root]);
+  await rm(path.join(root, "customize.md"), { force: true });
+
+  await assert.rejects(() => cli(["doctor", "--workspace", root]), /exit code 1|Command failed/);
+
+  await cli(["doctor", "--fix", "--workspace", root]);
+  assert.match(await readFile(path.join(root, "customize.md"), "utf8"), /# Customizations/);
 });
 
 test("a command outside any workspace explains how to make one", async (t) => {

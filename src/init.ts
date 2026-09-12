@@ -47,6 +47,24 @@ projects: projects
 assets: assets
 design: design.yml
 designDoc: design.md
+customize: customize.md
+`;
+
+// Starts empty of rules on purpose: this is the user's file, and it fills up as
+// they work. Every skill reads it before doing anything, and writes a new rule
+// here whenever the user asks for something that will come up again.
+const CUSTOMIZE_TEMPLATE = `# Customizations
+
+House rules for this workspace. Every pptx-gen skill reads this file first and
+follows what it says over its own defaults.
+
+There are no rules yet. They arrive as you work: ask for something that will
+come up again — "always do X after building", "never use Y" — and the agent
+writes it here, so you only have to say it once.
+
+## Rules
+
+<!-- One bullet per rule. Say what to do, and when it applies. -->
 `;
 
 const GITIGNORE_TEMPLATE = `# The link to the pptx-gen engine, recreated by \`pptx-gen doctor --fix\`.
@@ -79,6 +97,7 @@ export async function initWorkspace(options: InitOptions): Promise<InitResult> {
   // The design is seeded from the engine's live defaults rather than a
   // committed copy, so it can never drift from them.
   await writeIfAbsent(path.join(root, "design.yml"), serializeDesign(currentDesign()), created, skipped, options.force);
+  await writeIfAbsent(path.join(root, "customize.md"), CUSTOMIZE_TEMPLATE, created, skipped, options.force);
   await writeIfAbsent(path.join(root, ".gitignore"), GITIGNORE_TEMPLATE, created, skipped, options.force);
   await writeIfAbsent(
     path.join(root, "package.json"),
@@ -150,6 +169,9 @@ export async function fixWorkspace(workspace: Workspace, problems: WorkspaceProb
     } else if (problem.code === "missing-design") {
       await writeFile(workspace.designPath, serializeDesign(currentDesign()), "utf8");
       fixed.push(`Wrote ${workspace.designPath}`);
+    } else if (problem.code === "missing-customize") {
+      await writeFile(workspace.customizePath, CUSTOMIZE_TEMPLATE, "utf8");
+      fixed.push(`Wrote ${workspace.customizePath}`);
     } else if (problem.code.endsWith("engine-link")) {
       const link = await linkEngine(workspace.root);
       fixed.push(`Linked ${link} -> ${installDir()}`);

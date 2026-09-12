@@ -85,6 +85,7 @@ program
         bundledIcons: workspace.bundledIconsDir,
         design: workspace.designPath,
         designDoc: workspace.designDocPath,
+        customize: workspace.customizePath,
         designLoadedFrom: "file" in origin ? origin.file : null,
         customSlideGuide: path.join(workspace.installDir, "custom-template-instructions.md"),
         figureGuide: path.join(workspace.installDir, "figure-instructions.md"),
@@ -104,6 +105,7 @@ program
     console.log(`Assets      ${workspace.assetsDir}`);
     console.log(`Design      ${workspace.designPath}`);
     console.log(`Design doc  ${workspace.designDocPath}`);
+    console.log(`Customize   ${workspace.customizePath}`);
     console.log(`Install     ${workspace.installDir}`);
     if (problems.length > 0) {
       console.log("");
