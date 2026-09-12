@@ -34,7 +34,7 @@ const MODES = { x: 3.05, w: 2.4 };
 const ENGINE = { x: 5.85, w: 1.6 };
 const OUTPUT = { x: 7.8, w: 1.7 };
 
-export function howItWorksSlide(pageNum = 1): CustomSlide {
+export function howItWorksSlide(): CustomSlide {
   return new CustomSlide({
     name: "how-pptx-gen-works",
     background: "light",
@@ -161,7 +161,7 @@ export function howItWorksSlide(pageNum = 1): CustomSlide {
         margin: 0
       });
 
-      helpers.addFooter(slide, pageNum, { light: true });
+      helpers.addFooter(slide, { light: true });
     }
   });
 }

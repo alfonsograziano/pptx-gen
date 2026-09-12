@@ -33,7 +33,7 @@ fields:
     y: 2.15
     w: 8.55
     h: 2.6
-  - id: "2"
+  - id: page-number
     type: text
     shapeId: "5"
     name: Text 3
@@ -43,3 +43,4 @@ fields:
     y: 5.1
     w: 0.35
     h: 0.38
+    role: page-number

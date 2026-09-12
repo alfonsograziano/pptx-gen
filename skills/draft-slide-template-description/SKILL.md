@@ -83,3 +83,9 @@ Guidance:
   "a flexible content slide".
 - **List the fields.** Deck builders fill fields by id, so an accurate field list
   is the most useful part when there is no screenshot.
+- **Skip fields carrying a `role`.** A field tagged `role: page-number` is the
+  deck's to manage, not the builder's — the build turns it into a live slide
+  number. Mention the footer under Layout if it is visible, but never list it as
+  a field to fill. If the screenshot shows a page number and no field is tagged,
+  say so: whichever field holds it needs `role: page-number` in `fields.yml` or
+  the template will ship that number frozen.

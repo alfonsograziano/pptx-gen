@@ -21,6 +21,12 @@ export type TemplateField = {
   w?: number;
   h?: number;
   preserveStyleByDefault: boolean;
+  /**
+   * Marks a field the deck owns rather than the author. A `page-number` field is
+   * rewritten as a live PowerPoint slide-number field at build time, so it is
+   * never listed as a fillable variable.
+   */
+  role?: "page-number";
 };
 
 export type FieldsFile = {

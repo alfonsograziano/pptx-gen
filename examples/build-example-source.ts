@@ -52,7 +52,7 @@ const contentSlide = new CustomSlide({
       x: LAYOUT.BIL, y: 2.15, w: CW - (LAYOUT.BIL - LM), h: 2.6,
       fontSize: 12, fontFace: FONTS.sans, color: C.ink, lineSpacingMultiple: LS, margin: 0, valign: "top"
     });
-    helpers.addFooter(slide, 2, { light: true });
+    helpers.addFooter(slide, { light: true });
   }
 });
 

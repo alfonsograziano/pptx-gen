@@ -58,6 +58,7 @@ async function ingestOneSlide(options: IngestOneSlideOptions): Promise<string> {
   const singleSlidePkg = await PptxPackage.load(templatePptx);
   const fields = await extractTextFields(singleSlidePkg, keptSlideNumber);
   const fonts = await extractFonts(singleSlidePkg, keptSlideNumber);
+  const pageNumberField = fields.find((field) => field.role === "page-number");
 
   const metadata: TemplateMetadata = {
     id: options.templateName,
@@ -71,7 +72,11 @@ async function ingestOneSlide(options: IngestOneSlideOptions): Promise<string> {
       importedOn: new Date().toISOString().slice(0, 10)
     },
     fonts,
-    variables: fields.filter((field) => field.originalText.trim()).map((field) => field.id),
+    // The page number is the deck's to manage, not the author's, so it is not
+    // offered as a variable.
+    variables: fields
+      .filter((field) => field.originalText.trim() && field.role !== "page-number")
+      .map((field) => field.id),
     tags: []
   };
 
@@ -84,7 +89,14 @@ async function ingestOneSlide(options: IngestOneSlideOptions): Promise<string> {
   await writeYamlFile(path.join(templateDir, "template.yml"), metadata);
   await writeYamlFile(path.join(templateDir, "fields.yml"), fieldsFile);
   await writeTextFile(path.join(templateDir, "description.md"), descriptionStub(options.templateName));
-  await writeTextFile(path.join(templateDir, "ingestion-report.md"), ingestionReport(options.source, options.slide, options.totalSlides, fonts, fields.length));
+  await writeTextFile(path.join(templateDir, "ingestion-report.md"), ingestionReport({
+    source: options.source,
+    slide: options.slide,
+    totalSlides: options.totalSlides,
+    fonts,
+    fieldCount: fields.length,
+    pageNumberField: pageNumberField?.name
+  }));
 
   const warnings: { code: string; message: string }[] = [];
   await renderScreenshots(templatePptx, path.join(templateDir, "screenshots"), warnings);
@@ -120,14 +132,24 @@ TODO.
 `;
 }
 
-function ingestionReport(source: string, slide: number, totalSlides: number, fonts: string[], fieldCount: number): string {
+function ingestionReport(input: {
+  source: string;
+  slide: number;
+  totalSlides: number;
+  fonts: string[];
+  fieldCount: number;
+  pageNumberField?: string;
+}): string {
   return `# Ingestion report
 
-- Source: ${source}
-- Source slide: ${slide}
-- Source slide count: ${totalSlides}
-- Text fields: ${fieldCount}
-- Fonts: ${fonts.length ? fonts.join(", ") : "none detected"}
+- Source: ${input.source}
+- Source slide: ${input.slide}
+- Source slide count: ${input.totalSlides}
+- Text fields: ${input.fieldCount}
+- Fonts: ${input.fonts.length ? input.fonts.join(", ") : "none detected"}
+- Page number: ${input.pageNumberField
+    ? `detected on shape '${input.pageNumberField}', tagged \`role: page-number\` in fields.yml and rendered as a live slide-number field`
+    : "none detected — if this slide does show one, tag its field with `role: page-number` in fields.yml or it will ship frozen"}
 - Status: imported
 `;
 }

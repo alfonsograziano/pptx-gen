@@ -1,7 +1,9 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import type { AddSlideOptions, BuildReport, BuildWarning, DeckSlide, RenderOptions } from "./types.js";
 import { PptxPackage } from "./pptx-package.js";
-import { appendSlideFromPackage, applyOverrides, fillSlideText, getSlideEntries, keepOnlySlides, mergeEmbeddedFonts, validateFonts, validatePackage } from "./ooxml.js";
+import { appendSlideFromPackage, applyOverrides, applySlideNumbering, convertCustomSlidePageNumber, convertTemplatePageNumber, fillSlideText, flattenSlideNumberFields, getSlideEntries, keepOnlySlides, mergeEmbeddedFonts, validateFonts, validatePackage } from "./ooxml.js";
 import { richTextToPlain } from "./rich-text.js";
 import { loadTemplate } from "./templates.js";
 import { ensureDir, writeTextFile } from "./fs.js";
@@ -101,6 +103,7 @@ export class Presentation {
           }
 
           const clonedSlideNumber = await appendSlideFromPackage(pkg, srcPkg, srcEntries[0].slideNumber, warnings);
+          await convertCustomSlidePageNumber(pkg, clonedSlideNumber);
           clonedSlides.push(clonedSlideNumber);
           customSlidesUsed.push(requestedSlide.slide.name);
           warnings.push({
@@ -145,6 +148,7 @@ export class Presentation {
         );
 
         await fillSlideText(pkg, clonedSlideNumber, template.fieldsFile.fields, variables, warnings);
+        await convertTemplatePageNumber(pkg, clonedSlideNumber, template.fieldsFile.fields);
         await applyOverrides(pkg, clonedSlideNumber, template.fieldsFile.fields, requestedSlide.options.overrides ?? [], this.projectDir, warnings);
       });
     }
@@ -152,6 +156,8 @@ export class Presentation {
     await progress.step(`Validating fonts ${dimKind([...requiredFonts].join(", ") || "none")}`, () => validateFonts(pkg, [...requiredFonts], warnings));
     await progress.step("Assembling and saving deck", async () => {
       await keepOnlySlides(pkg, clonedSlides);
+      // Numbering can only be settled once the slides are in their final order.
+      await applySlideNumbering(pkg, warnings);
       await ensureDir(path.dirname(output));
       await pkg.save(output);
     });
@@ -162,7 +168,7 @@ export class Presentation {
       : path.join(path.dirname(output), "screenshots");
     const screenshots = await progress.step(
       "Rendering screenshots (LibreOffice)",
-      () => renderScreenshots(output, screenshotDir, warnings)
+      () => this.renderPreview(output, screenshotDir, warnings)
     );
 
     const report: BuildReport = {
@@ -186,6 +192,32 @@ export class Presentation {
     return report;
   }
 
+  /**
+   * Screenshot a throwaway copy of the deck with its slide-number fields
+   * flattened to plain text.
+   *
+   * LibreOffice resolves `slidenum` fields but ignores the deck's
+   * `firstSlideNum` offset, so shooting the delivered file would show a number
+   * one higher than PowerPoint on every slide of a deck with a cover. The
+   * delivered .pptx keeps its live fields; only this copy is flattened.
+   */
+  private async renderPreview(output: string, screenshotDir: string, warnings: BuildWarning[]): Promise<string[]> {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "pptx-gen-preview-"));
+    try {
+      const flattened = path.join(tempDir, path.basename(output));
+      const pkg = await PptxPackage.load(output);
+      await flattenSlideNumberFields(pkg);
+      await pkg.save(flattened);
+      return await renderScreenshots(flattened, screenshotDir, warnings);
+    } catch {
+      // Previewing is a convenience, so fall back to the delivered file rather
+      // than losing screenshots over it.
+      return renderScreenshots(output, screenshotDir, warnings);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  }
+
   private async renderAllCustom(output: string, options: RenderOptions, warnings: BuildWarning[]): Promise<BuildReport> {
     const customSlides = this.slides.map((slide) => {
       if (slide.kind !== "custom") throw new Error("Unexpected non-custom slide in all-custom render path.");
@@ -198,15 +230,24 @@ export class Presentation {
       ? SILENT_PROGRESS
       : new BuildProgress(this.title ?? "Building deck", expectedSteps);
 
-    await progress.step(`Rendering ${customSlides.length} custom slide(s) and saving deck`, () =>
-      renderCustomSlidesToPptx({
+    await progress.step(`Rendering ${customSlides.length} custom slide(s) and saving deck`, async () => {
+      await renderCustomSlidesToPptx({
         customSlides,
         output,
         projectDir: this.projectDir,
         assetsDir: this.assetsDir,
         title: this.title
-      })
-    );
+      });
+
+      // pptxgenjs writes the file directly, so the page-number text boxes become
+      // live fields in a second pass over the saved package.
+      const pkg = await PptxPackage.load(output);
+      for (const entry of await getSlideEntries(pkg)) {
+        await convertCustomSlidePageNumber(pkg, entry.slideNumber);
+      }
+      await applySlideNumbering(pkg, warnings);
+      await pkg.save(output);
+    });
     await progress.step("Validating PPTX package", () => validatePackage(output));
 
     customSlides.forEach((slide, index) => {
@@ -223,7 +264,7 @@ export class Presentation {
       : path.join(path.dirname(output), "screenshots");
     const screenshots = await progress.step(
       "Rendering screenshots (LibreOffice)",
-      () => renderScreenshots(output, screenshotDir, warnings)
+      () => this.renderPreview(output, screenshotDir, warnings)
     );
 
     const report: BuildReport = {

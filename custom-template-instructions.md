@@ -39,6 +39,10 @@ See `design.md` for the full system. In short:
   diagrams and infographics that need variety.
 - Add the page number and logo mark (via `addFooter`) unless the slide is a cover
   or closing slide.
+- **Never pass, compute, or hardcode a page number.** `addFooter(slide)` takes no
+  number: the build writes a live PowerPoint slide-number field, so the footer is
+  right however the deck is ordered — including after someone drags slides around
+  in PowerPoint. A slide function that accepts a `pageNum` argument is a bug.
 
 ## Project shape
 
@@ -64,7 +68,6 @@ const deck = new Presentation({
 });
 
 deck.addCustomSlide(architectureFlowSlide({
-  pageNum: 3,
   title: "Target architecture_",
 }));
 
@@ -87,7 +90,6 @@ import { CustomSlide, C, LAYOUT } from "../../src/index.js";
 const { LM, CW, LS } = LAYOUT;
 
 export function calloutSlide(input: {
-  pageNum: number;
   title: string;
   callout: string;
   body: string;
@@ -124,7 +126,7 @@ export function calloutSlide(input: {
         valign: "top",
       });
 
-      helpers.addFooter(slide, input.pageNum, { light: true });
+      helpers.addFooter(slide, { light: true });
     },
   });
 }
@@ -136,7 +138,6 @@ Use this for tradeoffs, before and after, current and future state, or two optio
 
 ```ts
 export function twoColumnSlide(input: {
-  pageNum: number;
   title: string;
   left: { heading: string; body: string; bullets?: string[] };
   right: { heading: string; body: string; bullets?: string[] };
@@ -174,7 +175,7 @@ export function twoColumnSlide(input: {
         });
       }
 
-      helpers.addFooter(slide, input.pageNum, { light: true });
+      helpers.addFooter(slide, { light: true });
     },
   });
 }
@@ -186,7 +187,6 @@ Use this for pillars, workstreams, principles, or three related steps.
 
 ```ts
 export function threeCardSlide(input: {
-  pageNum: number;
   title: string;
   intro: string;
   cards: Array<{ heading: string; body: string }>;
@@ -225,7 +225,7 @@ export function threeCardSlide(input: {
         });
       });
 
-      helpers.addFooter(slide, input.pageNum, { light: true });
+      helpers.addFooter(slide, { light: true });
     },
   });
 }
@@ -237,7 +237,6 @@ Use this for structured data. Keep tables small enough to read.
 
 ```ts
 export function tableSlide(input: {
-  pageNum: number;
   title: string;
   rows: string[][];
   colW?: number[];
@@ -280,7 +279,7 @@ export function tableSlide(input: {
         margin: [3, 6, 3, 6],
       });
 
-      helpers.addFooter(slide, input.pageNum, { light: true });
+      helpers.addFooter(slide, { light: true });
     },
   });
 }
@@ -292,7 +291,6 @@ Use this for takeaways, capabilities, or controls.
 
 ```ts
 export function iconGridSlide(input: {
-  pageNum: number;
   title: string;
   items: Array<{ icon: string; heading: string; body: string }>;
 }): CustomSlide {
@@ -352,7 +350,7 @@ export function iconGridSlide(input: {
         }
       }
 
-      helpers.addFooter(slide, input.pageNum, { light: true });
+      helpers.addFooter(slide, { light: true });
     },
   });
 }
@@ -364,7 +362,6 @@ Use this for roadmap, delivery plan, or sprint sequence slides.
 
 ```ts
 export function timelineSlide(input: {
-  pageNum: number;
   title: string;
   columns: string[];
   phases: Array<{
@@ -486,7 +483,7 @@ export function timelineSlide(input: {
         });
       });
 
-      helpers.addFooter(slide, input.pageNum, { light: true });
+      helpers.addFooter(slide, { light: true });
     },
   });
 }
@@ -498,7 +495,6 @@ Use this for systems, agent flows, data pipelines, or process maps.
 
 ```ts
 export function architectureFlowSlide(input: {
-  pageNum: number;
   title: string;
   nodes: Array<{
     id: string;
@@ -585,7 +581,7 @@ export function architectureFlowSlide(input: {
         });
       }
 
-      helpers.addFooter(slide, input.pageNum, { light: true });
+      helpers.addFooter(slide, { light: true });
     },
   });
 }
@@ -597,7 +593,6 @@ export function architectureFlowSlide(input: {
 
 ```ts
 export function svgLoopSlide(input: {
-  pageNum: number;
   title: string;
 }): CustomSlide {
   return new CustomSlide({
@@ -635,7 +630,7 @@ export function svgLoopSlide(input: {
         h: 3.2,
       });
 
-      helpers.addFooter(slide, input.pageNum, { light: true });
+      helpers.addFooter(slide, { light: true });
     },
   });
 }
@@ -647,7 +642,6 @@ Use this for API snippets, scorer examples, JSON contracts, or configuration.
 
 ```ts
 export function codePanelSlide(input: {
-  pageNum: number;
   title: string;
   intro?: string;
   code: string;
@@ -699,7 +693,7 @@ export function codePanelSlide(input: {
         });
       }
 
-      helpers.addFooter(slide, input.pageNum, { light: true });
+      helpers.addFooter(slide, { light: true });
     },
   });
 }
@@ -711,7 +705,6 @@ Use this for workshops and interactive sessions.
 
 ```ts
 export function exerciseSlide(input: {
-  pageNum: number;
   title: string;
   tag: string;
   time?: string;
@@ -788,7 +781,7 @@ export function exerciseSlide(input: {
         margin: 0,
       });
 
-      helpers.addFooter(slide, input.pageNum, { light: true });
+      helpers.addFooter(slide, { light: true });
     },
   });
 }

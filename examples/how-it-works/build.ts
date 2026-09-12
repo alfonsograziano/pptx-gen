@@ -19,7 +19,7 @@ const deck = new Presentation({
   projectDir: HERE
 });
 
-deck.addCustomSlide(howItWorksSlide(1));
+deck.addCustomSlide(howItWorksSlide());
 
 await deck.render({
   output: "output/how-it-works.pptx",
