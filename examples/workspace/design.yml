@@ -1,0 +1,6 @@
+# The example workspace uses the engine's default brand, so this overrides
+# nothing. Change a value here and rebuild with `npm run example` to see it
+# reach the generated slide.
+#
+# colors:
+#   accent: E8452C

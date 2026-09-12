@@ -240,7 +240,7 @@ export class Presentation {
 
     if (options.report) {
       await progress.step("Writing build report", () =>
-        writeTextFile(path.resolve(this.projectDir, options.report!), formatReport(report))
+        writeTextFile(path.resolve(this.projectDir, options.report!), formatReport(report, this.projectDir))
       );
     }
 
@@ -364,7 +364,7 @@ export class Presentation {
 
     if (options.report) {
       await progress.step("Writing build report", () =>
-        writeTextFile(path.resolve(this.projectDir, options.report!), formatReport(report))
+        writeTextFile(path.resolve(this.projectDir, options.report!), formatReport(report, this.projectDir))
       );
     }
 
@@ -469,16 +469,25 @@ function formatVariantGroups(report: BuildReport): string {
   return [...counts].map(([group, count]) => `${group} (${count})`).join(", ");
 }
 
-function formatReport(report: BuildReport): string {
+// Paths in the report file are written relative to the project, so a report
+// committed alongside a deck reads the same on every machine instead of
+// carrying the home directory of whoever built it. `report.output` itself
+// stays absolute, which is what the console summary wants.
+function formatReport(report: BuildReport, projectDir: string): string {
+  const local = (target: string) => {
+    const relative = path.relative(projectDir, target);
+    return relative && !relative.startsWith("..") ? relative : target;
+  };
+
   return `# Build report
 
 - Generated at: ${report.generatedAt}
-- Output: ${report.output}
+- Output: ${local(report.output)}
 - Slides built: ${report.slidesBuilt}
 - Templates used: ${report.templatesUsed.join(", ")}
 - Custom slides used: ${report.customSlidesUsed.length ? report.customSlidesUsed.join(", ") : "none"}
 - Variant groups: ${formatVariantGroups(report)}
-- Screenshots: ${report.screenshots.length ? report.screenshots.join(", ") : "none"}
+- Screenshots: ${report.screenshots.length ? report.screenshots.map(local).join(", ") : "none"}
 
 ## Slides
 

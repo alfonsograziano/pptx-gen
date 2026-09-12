@@ -4,10 +4,10 @@
  * This is a one-off authoring script, not part of the runtime. It draws two
  * plain slides with placeholder text using native shapes, writes them to
  * `examples/example-source.pptx`, and then that file is ingested into
- * `templates/` with the CLI (see the header of each generated template.yml).
+ * a workspace’s `templates/` with the CLI (see each generated template.yml).
  *
- *   npm run cli -- ingest --source examples/example-source.pptx --template title-cover --slide 1
- *   npm run cli -- ingest --source examples/example-source.pptx --template content-lead-bullets --slide 2
+ *   pptx-gen ingest --source examples/example-source.pptx --template title-cover --slide 1
+ *   pptx-gen ingest --source examples/example-source.pptx --template content-lead-bullets --slide 2
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -56,7 +56,14 @@ const contentSlide = new CustomSlide({
   }
 });
 
-const deck = new Presentation({ title: "Example source", projectDir: HERE });
+// Explicit dirs: this is an install-side authoring script, so it has to run
+// without a workspace.
+const deck = new Presentation({
+  title: "Example source",
+  projectDir: HERE,
+  templateLibrary: path.resolve(HERE, "..", "starter", "templates"),
+  assetsDir: path.resolve(HERE, "..", "assets")
+});
 deck.addCustomSlide(titleSlide);
 deck.addCustomSlide(contentSlide);
 
