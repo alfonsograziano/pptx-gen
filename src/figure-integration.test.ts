@@ -11,14 +11,14 @@ import { getSlideEntries } from "./ooxml.js";
 import { loadTemplate } from "./templates.js";
 import { ingestTemplate } from "./ingest.js";
 import type { Figure } from "./figure.js";
-import { fakeShot, TINY_PNG } from "./test-fixtures.js";
+import { BUNDLED_ASSETS, fakeShot, STARTER_TEMPLATES, TINY_PNG } from "./test-fixtures.js";
 
 // Figures placed on both kinds of slide, verified in the produced .pptx. The
 // rasterizer is stubbed, so these run identically with or without a browser.
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TEMPLATES = path.resolve(HERE, "..", "templates");
-const ASSETS = path.resolve(HERE, "..", "assets");
+const TEMPLATES = STARTER_TEMPLATES;
+const ASSETS = BUNDLED_ASSETS;
 
 const EMU_PER_IN = 914400;
 const emu = (inches: number) => Math.round(inches * EMU_PER_IN);

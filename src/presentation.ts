@@ -12,6 +12,8 @@ import { CustomSlide, makeCustomSlideTempPath, renderCustomSlideToPptx, renderCu
 import { FigureRenderer } from "./figure.js";
 import type { ShotFn } from "./html-shot.js";
 import { BuildProgress, dimKind } from "./progress.js";
+import { createAssetResolver, type AssetResolver } from "./assets.js";
+import { installDir, resolveWorkspaceSync, type Workspace } from "./workspace.js";
 
 // A no-op reporter used when progress output is disabled, so the render path
 // can call the same methods without branching everywhere.
@@ -23,12 +25,25 @@ const SILENT_PROGRESS = {
 
 export type PresentationOptions = {
   title?: string;
+  /**
+   * Template library folder. Defaults to the workspace's `templates/`.
+   *
+   * A relative path resolves against the current working directory, so prefer
+   * leaving this unset and letting the workspace supply it.
+   */
   templateLibrary?: string;
+  /** The deck's own folder. Defaults to the current working directory. */
   projectDir?: string;
-  /** Folder holding icons and logo assets. Defaults to `<templateLibrary>/../assets`. */
+  /** Folder holding logo assets and any custom icons. Defaults to the workspace's `assets/`. */
   assetsDir?: string;
   /** Rasterizer override for figures. Injected by tests so they need no browser. */
   shot?: ShotFn;
+  /**
+   * The workspace to take defaults from. Defaults to the one resolved from the
+   * environment. Only consulted for options left unset, so a caller that passes
+   * explicit paths needs no workspace at all.
+   */
+  workspace?: Workspace;
 };
 
 export class Presentation {
@@ -38,13 +53,31 @@ export class Presentation {
   private readonly title?: string;
   private readonly assetsDir: string;
   private readonly shot?: ShotFn;
+  private readonly assets: AssetResolver;
 
   constructor(options: PresentationOptions = {}) {
     this.title = options.title;
-    this.templateRoot = path.resolve(options.templateLibrary ?? "templates");
     this.projectDir = path.resolve(options.projectDir ?? process.cwd());
-    this.assetsDir = path.resolve(options.assetsDir ?? path.resolve(this.templateRoot, "..", "assets"));
     this.shot = options.shot;
+
+    // Resolve a workspace only when one is actually needed. A template library
+    // has no sensible default, so a missing one is what forces the lookup;
+    // assets fall back to the engine's own folder, which is where the bundled
+    // icons live anyway. That keeps `new Presentation({ templateLibrary })`
+    // usable with no workspace at all.
+    const workspace = options.templateLibrary === undefined
+      ? options.workspace ?? resolveWorkspaceSync()
+      : options.workspace;
+
+    this.templateRoot = path.resolve(options.templateLibrary ?? workspace!.templatesDir);
+    this.assetsDir = path.resolve(
+      options.assetsDir ?? workspace?.assetsDir ?? path.join(installDir(), "assets")
+    );
+    this.assets = createAssetResolver({
+      projectDir: this.projectDir,
+      assetsDir: this.assetsDir,
+      bundledIconsDir: workspace?.bundledIconsDir ?? path.join(installDir(), "assets", "icons")
+    });
   }
 
   addSlideFromTemplate(options: AddSlideOptions): this {
@@ -106,8 +139,7 @@ export class Presentation {
             customSlide: requestedSlide.slide,
             output: tempPptx,
             pageNum: index + 1,
-            projectDir: this.projectDir,
-            assetsDir: this.assetsDir,
+            assets: this.assets,
             title: this.title,
             figures
           });
@@ -167,7 +199,7 @@ export class Presentation {
         await fillSlideText(pkg, clonedSlideNumber, template.fieldsFile.fields, variables, warnings);
         await convertTemplatePageNumber(pkg, clonedSlideNumber, template.fieldsFile.fields);
         await applyOverrides(pkg, clonedSlideNumber, template.fieldsFile.fields, requestedSlide.options.overrides ?? [], {
-          rootDir: this.projectDir,
+          assets: this.assets,
           warnings,
           figures
         });
@@ -208,7 +240,7 @@ export class Presentation {
 
     if (options.report) {
       await progress.step("Writing build report", () =>
-        writeTextFile(path.resolve(this.projectDir, options.report!), formatReport(report))
+        writeTextFile(path.resolve(this.projectDir, options.report!), formatReport(report, this.projectDir))
       );
     }
 
@@ -284,8 +316,7 @@ export class Presentation {
       await renderCustomSlidesToPptx({
         customSlides,
         output,
-        projectDir: this.projectDir,
-        assetsDir: this.assetsDir,
+        assets: this.assets,
         title: this.title,
         figures
       });
@@ -333,7 +364,7 @@ export class Presentation {
 
     if (options.report) {
       await progress.step("Writing build report", () =>
-        writeTextFile(path.resolve(this.projectDir, options.report!), formatReport(report))
+        writeTextFile(path.resolve(this.projectDir, options.report!), formatReport(report, this.projectDir))
       );
     }
 
@@ -438,16 +469,25 @@ function formatVariantGroups(report: BuildReport): string {
   return [...counts].map(([group, count]) => `${group} (${count})`).join(", ");
 }
 
-function formatReport(report: BuildReport): string {
+// Paths in the report file are written relative to the project, so a report
+// committed alongside a deck reads the same on every machine instead of
+// carrying the home directory of whoever built it. `report.output` itself
+// stays absolute, which is what the console summary wants.
+function formatReport(report: BuildReport, projectDir: string): string {
+  const local = (target: string) => {
+    const relative = path.relative(projectDir, target);
+    return relative && !relative.startsWith("..") ? relative : target;
+  };
+
   return `# Build report
 
 - Generated at: ${report.generatedAt}
-- Output: ${report.output}
+- Output: ${local(report.output)}
 - Slides built: ${report.slidesBuilt}
 - Templates used: ${report.templatesUsed.join(", ")}
 - Custom slides used: ${report.customSlidesUsed.length ? report.customSlidesUsed.join(", ") : "none"}
 - Variant groups: ${formatVariantGroups(report)}
-- Screenshots: ${report.screenshots.length ? report.screenshots.join(", ") : "none"}
+- Screenshots: ${report.screenshots.length ? report.screenshots.map(local).join(", ") : "none"}
 
 ## Slides
 

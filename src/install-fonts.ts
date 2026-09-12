@@ -33,16 +33,15 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { PptxPackage } from "./pptx-package.js";
 import { extractFonts } from "./ooxml.js";
 import { FONTS } from "./design.js";
 import { userFontDir } from "./fonts.js";
+import { resolveWorkspaceSync } from "./workspace.js";
 
 const execFileAsync = promisify(execFile);
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TEMPLATE_ROOT = path.resolve(HERE, "..", "templates");
+const TEMPLATE_ROOT = resolveWorkspaceSync().templatesDir;
 
 const USER_FONT_DIR = userFontDir();
 
@@ -58,11 +57,16 @@ const GENERIC_FONTS = new Set(["Arial", "Calibri", "Aptos", "Helvetica", "Times 
 //
 // We deliberately do NOT use the variable `Family[wght].ttf` files here: see the
 // file header for why LibreOffice cannot render them.
-const DESIGN_FONTS: Record<string, { weights: number[]; italicWeights: number[] }> = {
-  [FONTS.sans]: { weights: [300, 400, 500, 600, 700, 900], italicWeights: [400, 700] },
-  [FONTS.serif]: { weights: [400, 500, 700], italicWeights: [400, 500, 700] },
-  [FONTS.mono]: { weights: [400, 500, 700], italicWeights: [] }
-};
+// Read inside a function, never at module level: FONTS is populated from the
+// workspace design at startup, and a module-level read would freeze the
+// engine defaults in place.
+function designFonts(): Record<string, { weights: number[]; italicWeights: number[] }> {
+  return {
+    [FONTS.sans]: { weights: [300, 400, 500, 600, 700, 900], italicWeights: [400, 700] },
+    [FONTS.serif]: { weights: [400, 500, 700], italicWeights: [400, 500, 700] },
+    [FONTS.mono]: { weights: [400, 500, 700], italicWeights: [] }
+  };
+}
 
 // Weight number -> the word Google Fonts uses, for human-readable file names.
 const WEIGHT_NAMES: Record<number, string> = {
@@ -73,10 +77,12 @@ const WEIGHT_NAMES: Record<number, string> = {
 // Variable font files that would make LibreOffice substitute a wrong font, one
 // pair per design family. We remove them before installing the static
 // replacements so a leftover variable file cannot shadow the good static one.
-const STALE_VARIABLE_FILES = Object.keys(DESIGN_FONTS).flatMap((family) => {
-  const base = family.replace(/ /g, "");
-  return [`${base}.ttf`, `${base}-Italic.ttf`];
-});
+function staleVariableFiles(): string[] {
+  return Object.keys(designFonts()).flatMap((family) => {
+    const base = family.replace(/ /g, "");
+    return [`${base}.ttf`, `${base}-Italic.ttf`];
+  });
+}
 
 // A deliberately ancient User-Agent so the Google Fonts CSS2 API serves plain
 // TrueType (.ttf) files. A modern UA gets woff2 (macOS will not install it); a
@@ -151,7 +157,7 @@ async function main(): Promise<void> {
   //    a wrong font, and a leftover variable file can shadow the static one.
   await mkdir(USER_FONT_DIR, { recursive: true });
   const removedStale: string[] = [];
-  for (const fileName of STALE_VARIABLE_FILES) {
+  for (const fileName of staleVariableFiles()) {
     const target = path.join(USER_FONT_DIR, fileName);
     if (await exists(target)) {
       await rm(target, { force: true });
@@ -167,7 +173,7 @@ async function main(): Promise<void> {
   const installedNow: string[] = [];
   const cannotInstall: string[] = [];
 
-  for (const [family, spec] of Object.entries(DESIGN_FONTS)) {
+  for (const [family, spec] of Object.entries(designFonts())) {
     let faces: StaticFace[];
     try {
       faces = await fetchStaticFaces(family, spec.weights, spec.italicWeights);
@@ -212,10 +218,10 @@ async function main(): Promise<void> {
     console.log("Options: install them manually, or accept the renderer's substitution fallback.");
   }
 
-  const stillMissing = [...new Set(cannotInstall)].filter((family) => !DESIGN_FONTS[family]);
+  const stillMissing = [...new Set(cannotInstall)].filter((family) => !designFonts()[family]);
   if (stillMissing.length) {
     console.log(`\nNo catalogue entry to auto-install: ${stillMissing.join(", ")}.`);
-    console.log("Add the family to DESIGN_FONTS in src/install-fonts.ts to support it.");
+    console.log("Add the family to designFonts() in src/install-fonts.ts to support it.");
   }
 
   if (installedNow.length || removedStale.length) {

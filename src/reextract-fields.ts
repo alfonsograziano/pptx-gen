@@ -11,14 +11,13 @@
  */
 import path from "node:path";
 import { readdir } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { PptxPackage } from "./pptx-package.js";
 import { extractTextFields, getSlideEntries } from "./ooxml.js";
 import { writeYamlFile } from "./fs.js";
 import type { FieldsFile } from "./types.js";
+import { resolveWorkspaceSync } from "./workspace.js";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TEMPLATE_ROOT = path.resolve(HERE, "..", "templates");
+const TEMPLATE_ROOT = resolveWorkspaceSync().templatesDir;
 
 // With no arguments, re-extract every template in the library; otherwise only
 // the named ones.

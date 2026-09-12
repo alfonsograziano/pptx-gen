@@ -4,6 +4,7 @@ import { PptxPackage } from "./pptx-package.js";
 import { extractFonts, extractTextFields, getSlideEntries, sliceToSingleSlide } from "./ooxml.js";
 import type { FieldsFile, TemplateMetadata } from "./types.js";
 import { renderScreenshots } from "./render.js";
+import { resolveWorkspaceSync } from "./workspace.js";
 
 export type IngestOptions = {
   source: string;
@@ -14,7 +15,7 @@ export type IngestOptions = {
 };
 
 export async function ingestTemplate(options: IngestOptions): Promise<string[]> {
-  const templateRoot = path.resolve(options.templateRoot ?? "templates");
+  const templateRoot = path.resolve(options.templateRoot ?? resolveWorkspaceSync().templatesDir);
   const source = path.resolve(options.source);
   const sourcePkg = await PptxPackage.load(source);
   const slides = await getSlideEntries(sourcePkg);
@@ -67,7 +68,9 @@ async function ingestOneSlide(options: IngestOneSlideOptions): Promise<string> {
     status: "draft",
     version: "1.0.0",
     source: {
-      deck: path.relative(process.cwd(), options.source),
+      // Relative to the template library, not the cwd, so the recorded path
+      // means the same thing whatever directory the ingest was run from.
+      deck: path.relative(options.templateRoot, options.source),
       slide: options.slide,
       importedOn: new Date().toISOString().slice(0, 10)
     },

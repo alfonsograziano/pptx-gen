@@ -1,14 +1,14 @@
 ---
 name: ingest-slide-templates
-description: Ingest one or more slides from a PowerPoint deck into the pptx-gen template library and document each one. Use when the user gives a source .pptx file (often a single slide or a deck downloaded from Google Slides) plus a list of slide numbers and a template name, and asks to import, ingest, or add slides as reusable templates in templates/. Runs the ingest CLI for each slide, then runs the draft-slide-template-description workflow on each imported template so it ships with a real description instead of a TODO stub.
+description: Ingest one or more slides from a PowerPoint deck into the pptx-gen template library and document each one. Use when the user gives a source .pptx file (often a single slide or a deck downloaded from Google Slides) plus a list of slide numbers and a template name, and asks to import, ingest, or add slides as reusable templates in the workspace template library. Runs the ingest CLI for each slide, then runs the draft-slide-template-description workflow on each imported template so it ships with a real description instead of a TODO stub.
 ---
 
 # Ingest slide templates
 
 ## Purpose
 
-Turn slides from a real deck into reusable templates in `templates/`, fully
-documented and ready to pick when building a deck.
+Turn slides from a real deck into reusable templates in the workspace's
+template library, fully documented and ready to pick when building a deck.
 
 This skill chains two steps:
 
@@ -23,10 +23,20 @@ The output is one finished template folder per slide, with `template.pptx`,
 `template.yml`, `fields.yml`, an optional screenshot, and a real
 `description.md`.
 
-## Fixed paths
+## Resolve the workspace first
 
-- Ingest CLI: run from the repo root with `npm run cli -- ingest ...`
-- Template library: `templates/<template-name>/`
+The template library lives in a **workspace** — a folder separate from the
+pptx-gen install, so the engine can be updated without touching it. Get the real
+paths before doing anything else:
+
+```bash
+pptx-gen workspace --json
+```
+
+Use the absolute `templates` path it returns (called `$TEMPLATES` below). If the
+command fails with "No pptx-gen workspace found", stop and ask the user where
+their workspace is, or offer `pptx-gen init <dir>`. Never write templates into
+the pptx-gen install.
 
 Use Node 20 or newer.
 
@@ -66,16 +76,18 @@ Reconcile the numbers the user gave against this count:
 
 ### 2. Ingest each slide
 
-For each (position, template name) pair, run from the repo root. First confirm
-the target name is free (`ls templates/<name>`); if it exists, ask before
-overwriting.
+For each (position, template name) pair, first confirm the target name is free
+(`ls "$TEMPLATES/<name>"`); if it exists, ask before overwriting.
 
 ```bash
-npm run cli -- ingest \
+pptx-gen ingest \
   --source "<source.pptx>" \
   --template "<template-name>" \
   --slide <position>
 ```
+
+Templates land in the workspace's `templates/` by default; pass
+`--template-root <dir>` only to target a different library.
 
 The CLI ingests one slide per call, so loop it once per slide. After each ingest,
 check the folder was created. If a `screenshot-warnings.md` appeared, read it and
@@ -103,5 +115,5 @@ wrote, and any screenshot warnings.
   the normal case when the user grabs one slide from a big deck.
 - **Do not invent layout.** The screenshot (or, if absent, the fields) is the
   source of truth for the description, not the slide name.
-- **Template names are folder names.** Keep them kebab-case and descriptive of
+- **Template names are folder names** under the workspace's `templates/`. Keep them kebab-case and descriptive of
   intent (`two-tier-comparison-cards`), not of the source deck.

@@ -5,6 +5,7 @@ import { C, FONTS, LAYOUT, LOGO_FILES } from "./design.js";
 import { fitBox, type Figure, type FigureFit, type FigureRenderer } from "./figure.js";
 import { PAGE_NUMBER_SHAPE_NAME } from "./ooxml.js";
 import { parseSvg, svgToGeomPoints } from "./svg-path.js";
+import type { AssetResolver } from "./assets.js";
 
 type Slide = {
   addText: (text: string | TextRun[], options?: Record<string, unknown>) => unknown;
@@ -41,13 +42,12 @@ export type Point = {
 export type CustomSlideHelpers = ReturnType<typeof createCustomSlideHelpers>;
 
 export function createCustomSlideHelpers(options: {
-  projectDir: string;
-  assetsDir: string;
+  assets: AssetResolver;
   shapeType: ShapeType;
   /** Shared across the build. Without it, `addFigure` draws a placeholder. */
   figures?: FigureRenderer;
 }) {
-  const { projectDir, assetsDir, shapeType, figures } = options;
+  const { assets, shapeType, figures } = options;
 
   return {
     addHeader(slide: Slide, text: string, opts: { light?: boolean } = {}) {
@@ -89,17 +89,15 @@ export function createCustomSlideHelpers(options: {
     // Places the small logo mark bottom-right, if the configured PNG exists in
     // `assets/`. Ships as a no-op until you add your own logo files.
     addLogo(slide: Slide, opts: { light?: boolean } = {}) {
-      const file = opts.light ? LOGO_FILES.markDark : LOGO_FILES.markLight;
-      const logoPath = path.join(assetsDir, file);
-      if (!existsSync(logoPath)) return;
+      const logoPath = assets.resolveLogo(opts.light ? LOGO_FILES.markDark : LOGO_FILES.markLight);
+      if (!logoPath) return;
       slide.addImage({ path: logoPath, x: 9.3, y: 5.0, w: 0.33, h: 0.26 });
     },
 
     // Places the full wordmark, if the configured PNG exists in `assets/`.
     addWordmark(slide: Slide, opts: { light?: boolean; x?: number; y?: number; w?: number; h?: number } = {}) {
-      const file = opts.light ? LOGO_FILES.wordmarkDark : LOGO_FILES.wordmarkLight;
-      const logoPath = path.join(assetsDir, file);
-      if (!existsSync(logoPath)) return;
+      const logoPath = assets.resolveLogo(opts.light ? LOGO_FILES.wordmarkDark : LOGO_FILES.wordmarkLight);
+      if (!logoPath) return;
       slide.addImage({
         path: logoPath,
         x: opts.x ?? LAYOUT.LM,
@@ -269,7 +267,7 @@ export function createCustomSlideHelpers(options: {
     },
 
     async addIcon(slide: Slide, icon: string, box: Box, opts: { color?: string; width?: number } = {}) {
-      const iconPath = resolveAsset(projectDir, assetsDir, icon, "icons");
+      const iconPath = assets.resolveIcon(icon);
       const svg = await readFile(iconPath, "utf8");
       this.addVectorIcon(slide, svg, box, opts);
     },
@@ -352,12 +350,6 @@ export function createCustomSlideHelpers(options: {
       });
     }
   };
-}
-
-function resolveAsset(projectDir: string, assetsDir: string, filePath: string, fallbackFolder?: string): string {
-  if (path.isAbsolute(filePath)) return filePath;
-  if (filePath.includes("/") || filePath.includes("\\")) return path.resolve(projectDir, filePath);
-  return path.join(assetsDir, fallbackFolder ?? "", filePath.endsWith(".svg") ? filePath : `${filePath}.svg`);
 }
 
 function stripHash(value: string): string {

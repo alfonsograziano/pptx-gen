@@ -6,6 +6,7 @@ import { C, FONTS, LAYOUT } from "./design.js";
 import { createCustomSlideHelpers, type CustomSlideHelpers } from "./custom-slide-helpers.js";
 import type { FigureRenderer } from "./figure.js";
 import { ensureDir } from "./fs.js";
+import type { AssetResolver } from "./assets.js";
 
 type Pptx = {
   defineLayout: (layout: { name: string; width: number; height: number }) => void;
@@ -37,6 +38,8 @@ export type CustomSlideContext = {
   pageNum: number;
   projectDir: string;
   assetsDir: string;
+  /** Resolves icon names, logo files, and project-relative paths. */
+  assets: AssetResolver;
   design: {
     colors: typeof C;
     layout: typeof LAYOUT;
@@ -84,8 +87,7 @@ export async function renderCustomSlideToPptx(options: {
   customSlide: CustomSlide;
   output: string;
   pageNum: number;
-  projectDir: string;
-  assetsDir: string;
+  assets: AssetResolver;
   title?: string;
   figures?: FigureRenderer;
 }): Promise<void> {
@@ -93,8 +95,7 @@ export async function renderCustomSlideToPptx(options: {
   const slide = pptx.addSlide();
   applyBackground(slide, options.customSlide.background);
   const helpers = createCustomSlideHelpers({
-    projectDir: options.projectDir,
-    assetsDir: options.assetsDir,
+    assets: options.assets,
     shapeType: pptx.ShapeType,
     figures: options.figures,
   });
@@ -103,8 +104,9 @@ export async function renderCustomSlideToPptx(options: {
     pptx,
     slide,
     pageNum: options.pageNum,
-    projectDir: options.projectDir,
-    assetsDir: options.assetsDir,
+    projectDir: options.assets.projectDir,
+    assetsDir: options.assets.assetsDir,
+    assets: options.assets,
     design: { colors: C, layout: LAYOUT },
     helpers
   });
@@ -116,15 +118,13 @@ export async function renderCustomSlideToPptx(options: {
 export async function renderCustomSlidesToPptx(options: {
   customSlides: CustomSlide[];
   output: string;
-  projectDir: string;
-  assetsDir: string;
+  assets: AssetResolver;
   title?: string;
   figures?: FigureRenderer;
 }): Promise<void> {
   const pptx = createCustomPresentation(options.title);
   const helpers = createCustomSlideHelpers({
-    projectDir: options.projectDir,
-    assetsDir: options.assetsDir,
+    assets: options.assets,
     shapeType: pptx.ShapeType,
     figures: options.figures,
   });
@@ -136,8 +136,9 @@ export async function renderCustomSlidesToPptx(options: {
       pptx,
       slide,
       pageNum: index + 1,
-      projectDir: options.projectDir,
-      assetsDir: options.assetsDir,
+      projectDir: options.assets.projectDir,
+      assetsDir: options.assets.assetsDir,
+      assets: options.assets,
       design: { colors: C, layout: LAYOUT },
       helpers
     });

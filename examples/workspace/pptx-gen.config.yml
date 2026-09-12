@@ -1,0 +1,14 @@
+# The example workspace.
+#
+# A real workspace, laid out exactly like one `pptx-gen init` would create, so
+# the demo exercises the same path a user takes. It lives in the repo only
+# because it is documentation; your own workspace belongs somewhere else
+# entirely.
+#
+# Templates and assets point back at the install rather than being copied,
+# which keeps the repo free of duplicated binaries.
+version: 1
+templates: ../../starter/templates
+assets: ../../assets
+projects: projects
+design: design.yml

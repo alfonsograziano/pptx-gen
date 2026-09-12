@@ -4,7 +4,7 @@
  * "design from scratch" mode it describes: open it in PowerPoint or Google
  * Slides and every part is editable and recolorable.
  */
-import { CustomSlide, C, FONTS, LAYOUT } from "../../src/index.js";
+import { CustomSlide, C, FONTS, LAYOUT } from "pptx-gen";
 
 const { LM, CW } = LAYOUT;
 

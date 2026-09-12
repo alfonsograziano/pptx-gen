@@ -1,13 +1,14 @@
 ---
 name: draft-slide-template-description
-description: Draft the description.md for a slide template in templates/ by looking at its rendered screenshot (or its fields when no screenshot exists). Use whenever the user wants to describe, document, or write up what a slide template looks like and when to use it, fill in a template's TODO description stub, or asks "what is this slide for" about a template in the library. Triggers on a template name, or a request to document one or more slide templates. If no name is given, ask for it; if several are given, do each one.
+description: Draft the description.md for a slide template in the workspace template library by looking at its rendered screenshot (or its fields when no screenshot exists). Use whenever the user wants to describe, document, or write up what a slide template looks like and when to use it, fill in a template's TODO description stub, or asks "what is this slide for" about a template in the library. Triggers on a template name, or a request to document one or more slide templates. If no name is given, ask for it; if several are given, do each one.
 ---
 
 # Draft slide template description
 
 ## Purpose
 
-Every template folder under `templates/` ships a `description.md` that tells a
+Every template folder in the workspace's template library ships a
+`description.md` that tells a
 future deck builder what the slide looks like and when to reach for it. Freshly
 ingested templates carry only a TODO stub. This skill replaces that stub with a
 short, accurate description.
@@ -23,7 +24,9 @@ was drafted from fields rather than a render.
 
 ## Inputs
 
-- A **template name** is a folder name under `templates/`.
+- A **template name** is a folder name under the workspace's `templates/`.
+  Get that path with `pptx-gen workspace --json` (its `templates` key, called
+  `$TEMPLATES` below); never assume a path relative to the pptx-gen install.
 - If the request gives **no name**, list a few available folders and ask which to
   document.
 - If it gives **several**, do each independently. Do not blend observations
@@ -33,7 +36,7 @@ was drafted from fields rather than a render.
 
 For each template:
 
-1. **Resolve the folder** `templates/<name>/`. If it does not exist, list the
+1. **Resolve the folder** `$TEMPLATES/<name>/`. If it does not exist, list the
    available folders and ask the user to confirm the name.
 
 2. **Look at the screenshot** at `screenshots/slide-01.png` if present. Read it

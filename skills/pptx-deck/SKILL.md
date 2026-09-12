@@ -19,22 +19,42 @@ an existing look; designing from scratch is the right path when no template fits
 when the deck is bespoke, or when there is no template library yet. Prefer cloning
 only when a genuinely suitable template exists.
 
-## Fixed paths (relative to the repo root)
+## Resolve the workspace first
 
-- Static engine: `src/`
-- Template library: `templates/`
-- Icon library: `assets/icons/`
-- Design system: `design.md` (and its code source `src/design.ts`)
-- Custom slide instructions: `custom-template-instructions.md`
-- Figure instructions: `figure-instructions.md`
-- Generated decks: `projects/<deck-id>/`
+Your templates, brand, and decks live in a **workspace** — a folder separate
+from the pptx-gen install, so the engine can be updated without touching them.
+Never assume paths relative to the pptx-gen repo, and never write files inside
+the install.
+
+Get the real paths before doing anything else:
+
+```bash
+pptx-gen workspace --json
+```
+
+Use the absolute paths it returns. Referred to below as:
+
+| Key | Used for |
+| --- | --- |
+| `templates` | the slide template library |
+| `projects` | one folder per deck |
+| `assets` / `icons` | logos, and icons the user added |
+| `design` | `design.yml`, the brand tokens |
+| `designDoc` | `design.md`, the brand doc to read |
+| `customSlideGuide` | how to design slides from scratch |
+| `figureGuide` | how to author HTML figures |
+| `engineSpecifier` | what a build script imports (`pptx-gen`) |
+
+If it fails with "No pptx-gen workspace found", stop and ask the user where
+their workspace is, or offer to create one with `pptx-gen init <dir>`. Do not
+guess, and do not fall back to repo-relative paths.
 
 ## Read the design system first
 
 Before writing `build.ts`, choosing templates, or running the generator, read
-`design.md`. It defines the colours, fonts, the sentence-case convention, the
-slide grid, and the layout conventions every deck follows. If the user has
-customised the design, this is where their choices live.
+the `designDoc` file. It defines the colours, fonts, the sentence-case
+convention, the slide grid, and the layout conventions every deck follows. If
+the user has customised the design, this is where their choices live.
 
 Use Node 20 or newer:
 
@@ -102,8 +122,10 @@ Rules for this step:
 List template folders and read their guidance:
 
 ```bash
-find templates -maxdepth 2 \( -name template.yml -o -name description.md -o -name fields.yml \) | sort
+find "$TEMPLATES" -maxdepth 2 \( -name template.yml -o -name description.md -o -name fields.yml \) | sort
 ```
+
+(`$TEMPLATES` is the `templates` path from `pptx-gen workspace --json`.)
 
 For each candidate slide, read:
 
@@ -116,14 +138,23 @@ Prefer fewer strong slides over many weak ones.
 
 ### 3. Create the deck project
 
+```bash
+pptx-gen new <deck-id>
+```
+
+That scaffolds the project under the workspace's `projects` folder:
+
 ```text
-projects/<deck-id>/
+<projects>/<deck-id>/
   build.ts
   brief.md
   figures/        # authored figure HTML, if the deck has any (see 4d)
   inputs/
   output/
 ```
+
+Add `--custom` to also get a `custom.ts` for slides designed from scratch, and
+create `figures/` yourself when the deck needs figures.
 
 Keep all deck-specific files inside this folder. `figures/` is source and is
 kept; the engine writes the rendered PNGs, and a copy of each figure's HTML, to
@@ -134,12 +165,15 @@ kept; the engine writes the rendered PNGs, and a copy of each figure's HTML, to
 Use the static API. Do not edit `src/` for normal deck generation.
 
 ```ts
-import { Presentation, md } from "../../src/index.js";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { Presentation, md } from "pptx-gen";
 
 const deck = new Presentation({
   title: "Deck title",
-  templateLibrary: "templates",
-  projectDir: "projects/<deck-id>",
+  // The deck's own folder, so the output paths below land next to this script
+  // wherever it is run from. Templates and assets come from the workspace.
+  projectDir: path.dirname(fileURLToPath(import.meta.url)),
 });
 
 deck.addSlideFromTemplate({
@@ -160,7 +194,7 @@ await deck.render({
 
 Rules:
 
-- Use only template names that exist in `templates/`.
+- Use only template names that exist in the workspace's `templates` folder.
 - Fill every required variable, using the field ids from `fields.yml`.
 - Preserve the original layout unless an override is needed.
 - Use `md(...)` for markdown input. The engine converts markdown to styled plain
@@ -173,18 +207,18 @@ Rules:
 
 For any slide with no fitting template (covers, section breaks, diagrams, flows,
 code panels, tables, timelines, or a bespoke look), read
-`custom-template-instructions.md` first, then create
-`projects/<deck-id>/custom.ts` with named layout functions and call them from
-`build.ts`:
+the `customSlideGuide` file first, then create `custom.ts` in the project
+folder with named layout functions and call them from `build.ts`:
 
 ```ts
-import { Presentation } from "../../src/index.js";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { Presentation } from "pptx-gen";
 import { architectureFlowSlide } from "./custom.js";
 
 const deck = new Presentation({
   title: "Deck title",
-  templateLibrary: "templates",
-  projectDir: "projects/<deck-id>",
+  projectDir: path.dirname(fileURLToPath(import.meta.url)),
 });
 
 deck.addCustomSlide(architectureFlowSlide({ title: "Target architecture_", nodes: [], arrows: [] }));
@@ -316,10 +350,10 @@ why the bar is high. Apply the parts test: name the five things a viewer would
 want to click and change. If you can name them, build it natively instead.
 Diagrams, icons, cards, and timelines are always native.
 
-**Read `figure-instructions.md` before writing any figure markup.** It defines
+**Read the `figureGuide` file before writing any figure markup.** It defines
 the brand CSS variables the engine injects and the rules the HTML must follow.
 
-Put the HTML in `projects/<deck-id>/figures/`. On a custom slide:
+Put the HTML in the project's own `figures/` folder. On a custom slide:
 
 ```ts
 const CONSOLE: Figure = {
@@ -362,16 +396,17 @@ Rules:
 
 ### 5. Run and self-heal
 
-From the repo root:
-
 ```bash
-npm run build
-npm run cli -- build --script projects/<deck-id>/build.ts
+pptx-gen build --script <projects>/<deck-id>/build.ts
 ```
 
 If the build fails: read the error, fix `build.ts` or the project inputs, and
-rerun. Repeat until it succeeds or there is a real engine bug. Do not patch
-`src/` unless the failure is clearly a reusable engine bug.
+rerun. Repeat until it succeeds or there is a real engine bug. Do not patch the
+pptx-gen install unless the failure is clearly a reusable engine bug — and say
+so if you do, because the user's next engine update will overwrite it.
+
+If the error is about a missing workspace or a missing engine link, run
+`pptx-gen doctor --fix`.
 
 ### 6. Review output
 

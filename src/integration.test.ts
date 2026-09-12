@@ -10,10 +10,11 @@ import { CustomSlide } from "./custom-slide.js";
 import { PptxPackage } from "./pptx-package.js";
 import { getSlideEntries } from "./ooxml.js";
 import { C, FONTS } from "./design.js";
+import { BUNDLED_ASSETS, STARTER_TEMPLATES } from "./test-fixtures.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TEMPLATES = path.resolve(HERE, "..", "templates");
-const ASSETS = path.resolve(HERE, "..", "assets");
+const TEMPLATES = STARTER_TEMPLATES;
+const ASSETS = BUNDLED_ASSETS;
 const ICONS = path.join(ASSETS, "icons");
 
 const EMU_PER_IN = 914400;
@@ -127,7 +128,11 @@ test("integration: templates + custom slides + every override, verified end-to-e
     overrides: [
       { op: "hide", target: "page-number" },
       { op: "resize", target: "a-lead-statement-that-frames-the-thr", w: 9.0, h: 1.2 },
-      { op: "addIcon", id: "star-icon", icon: path.join(ICONS, "star.svg"), x: 8.9, y: 0.3, w: 0.4, h: 0.4 }
+      { op: "addIcon", id: "star-icon", icon: path.join(ICONS, "star.svg"), x: 8.9, y: 0.3, w: 0.4, h: 0.4 },
+      // A BARE icon name on a cloned-template slide. This used to resolve
+      // against the project dir and fail; it now goes through the icon
+      // libraries, exactly as it does on a custom slide.
+      { op: "addIcon", id: "rocket-icon", icon: "rocket", x: 8.4, y: 0.3, w: 0.4, h: 0.4 }
     ]
   });
 
@@ -275,6 +280,7 @@ test("integration: templates + custom slides + every override, verified end-to-e
   assert.ok(s3.includes(`<a:ext cx="${emu(9.0)}" cy="${emu(1.2)}"/>`), "lead resized to 9x1.2");
   // addIcon added an svg image referenced by the slide.
   assert.ok(s3.includes("<a:blip"), "addIcon (svg) inserted a picture with a blip");
+  assert.ok(s3.includes('name="rocket-icon"'), "a bare icon name resolves on a cloned-template slide");
 
   // --- Slide 4: custom slide with a bespoke background. --------------------
   assert.ok(s4.includes("0EA5E9"), "custom background colour applied");

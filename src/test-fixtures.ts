@@ -1,5 +1,19 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { writeFile } from "node:fs/promises";
 import type { ShotFn, ShotRequest } from "./html-shot.js";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * The install's seed template library, which the tests use as their fixture
+ * library. Kept here rather than re-derived in each test file so moving it is a
+ * one-line change.
+ */
+export const STARTER_TEMPLATES = path.resolve(HERE, "..", "starter", "templates");
+
+/** The install's bundled assets, including the icon set. */
+export const BUNDLED_ASSETS = path.resolve(HERE, "..", "assets");
 
 /**
  * A 1x1 transparent PNG. Lets tests exercise image and figure handling without

@@ -9,9 +9,10 @@ import { CustomSlide } from "./custom-slide.js";
 import { md } from "./rich-text.js";
 import { PptxPackage } from "./pptx-package.js";
 import { getSlideEntries } from "./ooxml.js";
+import { STARTER_TEMPLATES } from "./test-fixtures.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TEMPLATES = path.resolve(HERE, "..", "templates");
+const TEMPLATES = STARTER_TEMPLATES;
 
 test("builds a two-slide deck from templates with replaced text", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "pptx-build-test-"));
