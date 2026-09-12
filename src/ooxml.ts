@@ -7,6 +7,7 @@ import type { BuildWarning, SlideOverride, TemplateField, TextStyle } from "./ty
 import { richTextToPlain } from "./rich-text.js";
 import { asArray, buildXml, escapeXml, parseXml, unescapeXml } from "./xml.js";
 import { C, FONTS, LAYOUT } from "./design.js";
+import type { AssetResolver } from "./assets.js";
 
 const EMU_PER_IN = 914400;
 const SLIDE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
@@ -448,8 +449,8 @@ export async function fillSlideText(
 }
 
 export type OverrideContext = {
-  /** Deck project directory; asset paths resolve against it. */
-  rootDir: string;
+  /** Resolves icon names, logo files, and paths relative to the deck project. */
+  assets: AssetResolver;
   warnings: BuildWarning[];
   /** Shared across the build. Without it, figure overrides fall back. */
   figures?: FigureRenderer;
@@ -462,7 +463,7 @@ export async function applyOverrides(
   overrides: SlideOverride[],
   ctx: OverrideContext
 ): Promise<void> {
-  const { rootDir, warnings } = ctx;
+  const { assets, warnings } = ctx;
   let slideXml = await pkg.text(`ppt/slides/slide${slideNumber}.xml`);
 
   for (const override of overrides) {
@@ -485,11 +486,17 @@ export async function applyOverrides(
     } else if (override.op === "addText") {
       slideXml = insertShape(slideXml, createTextShape(override.id, richTextToPlain(override.text), override.x, override.y, override.w, override.h, override.style));
     } else if (override.op === "addSvg" || override.op === "addIcon") {
-      const sourcePath = path.resolve(rootDir, override.op === "addSvg" ? override.path : override.icon);
+      // addSvg names a file in the deck's own project; addIcon names an icon in
+      // the icon libraries. Resolving both against the project dir, as this
+      // used to, meant `{ op: "addIcon", icon: "rocket" }` worked on a custom
+      // slide and failed on a cloned template slide.
+      const sourcePath = override.op === "addSvg"
+        ? assets.resolveProjectPath(override.path)
+        : assets.resolveIcon(override.icon);
       const relId = await embedImagePart(pkg, slideNumber, await readFile(sourcePath), extensionOf(sourcePath, "svg"));
       slideXml = insertShape(slideXml, createPictureShape(override.id, relId, override.x, override.y, override.w, override.h));
     } else if (override.op === "addImage") {
-      const sourcePath = path.resolve(rootDir, override.path);
+      const sourcePath = assets.resolveProjectPath(override.path);
       const relId = await embedImagePart(pkg, slideNumber, await readFile(sourcePath), extensionOf(sourcePath, "png"));
       slideXml = insertShape(slideXml, createPictureShape(override.id, relId, override.x, override.y, override.w, override.h));
     } else if (override.op === "addFigure") {
@@ -527,7 +534,7 @@ export async function applyOverrides(
         ));
       }
     } else if (override.op === "replaceImage") {
-      const sourcePath = path.resolve(rootDir, override.path);
+      const sourcePath = assets.resolveProjectPath(override.path);
       const relId = await embedImagePart(pkg, slideNumber, await readFile(sourcePath), extensionOf(sourcePath, "png"));
       slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) => {
         if (!/<a:blip\b[^>]*\br:embed="/.test(shapeXml)) {
