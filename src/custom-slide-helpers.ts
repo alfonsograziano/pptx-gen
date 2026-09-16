@@ -121,6 +121,11 @@ export function createCustomSlideHelpers(options: {
       });
     },
 
+    // `fill` and `color` move together. A card on a dark slide needs a dark
+    // fill (C.inkSoft) AND light text (C.white); setting only the fill leaves
+    // the heading and body in ink, which is unreadable. The colour is never
+    // inferred from the fill: a caller who wants muted body text on a pale card
+    // should be able to have it.
     addCard(
       slide: Slide,
       opts: Box & {
@@ -128,10 +133,13 @@ export function createCustomSlideHelpers(options: {
         body?: string;
         accent?: string;
         fill?: string;
+        /** Heading and body colour. Defaults to `C.ink`, which suits a light fill. */
+        color?: string;
       }
     ) {
       const accent = stripHash(opts.accent ?? C.accent);
       const fill = stripHash(opts.fill ?? C.white);
+      const color = stripHash(opts.color ?? C.ink);
       slide.addShape(shapeType.rect, {
         x: opts.x,
         y: opts.y,
@@ -154,7 +162,7 @@ export function createCustomSlideHelpers(options: {
         h: 0.34,
         fontSize: 12,
         fontFace: FONTS.serif,
-        color: C.ink,
+        color,
         margin: 0
       });
       if (opts.body) {
@@ -165,7 +173,7 @@ export function createCustomSlideHelpers(options: {
           h: Math.max(0.2, opts.h - 0.76),
           fontSize: 9.5,
           fontFace: FONTS.sans,
-          color: C.ink,
+          color,
           lineSpacingMultiple: LAYOUT.LS,
           valign: "top",
           margin: 0
