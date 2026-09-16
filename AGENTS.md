@@ -31,7 +31,8 @@ Run `npm run check` before handing work back — there is no CI, so it is the wh
 
 ## Rules
 
-- **The engine and the workspace are separate.** A workspace (`pptx-gen.config.yml`, `design.yml`, `templates/`, `projects/`) lives outside this repo. Never write deck files into the install, and never resolve a path relative to the install — go through `resolveWorkspaceSync` / `pptx-gen workspace --json`.
+- **The engine and the workspace are separate.** A workspace (`pptx-gen.config.yml`, `design.yml`, `templates/`, `projects/`) lives outside this repo. Never write deck files into the install, and never resolve a path relative to the install — go through `resolveWorkspaceSync` / `pptx-gen workspace --json`. Every workspace-derived default resolves on its own: one explicit option must never switch another one off.
+- **pptxgenjs is `require`d, never imported.** Its `import` condition points at ESM in a `.js` file, which Node loads through `require(esm)` — illegal inside the import cycle the CLI's in-process tsx loader creates, and fatal on Node 23 and 24. `src/custom-slide.ts` owns the one lazy `createRequire` call, and a test scans for any `import` of it.
 - **Design values are data, not code.** They come from the workspace's `design.yml` layered over the defaults in `src/design.ts`. Adding a token means adding a default *and* letting a partial override fall back, so an older `design.yml` keeps working.
 - **Slides stay native.** Everything the engine emits must be a shape, line or text run, because Google Slides cannot edit an embedded image. HTML figures are the one exception and the bar is high — see `custom-template-instructions.md` and `figure-instructions.md`, which are the full contracts for custom slides and figures.
 - **Cloned slides keep their pixels.** Filling a field or applying an override edits the original slide's XML; it never redraws it. A change that makes a cloned slide look different from its source is a bug.

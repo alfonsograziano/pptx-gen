@@ -113,9 +113,11 @@ Update the colour tables, the font roles, and any conventions so the doc matches
 
 Drop PNGs into the workspace's `assets` folder, named exactly as in the `logos`
 section (`logo-mark-dark.png`, `logo-mark-light.png`, `logo-wordmark-dark.png`,
-`logo-wordmark-light.png`). Use PNGs, not SVGs. Logos are workspace-only: if a
-file is absent the helpers skip it silently, and nothing falls back to the
-install, so a deck can never pick up a stray placeholder mark.
+`logo-wordmark-light.png`). Use PNGs, not SVGs. Logos are workspace-only: nothing
+falls back to the install, so a deck can never pick up a stray placeholder mark.
+A file that is absent leaves the logo off and adds a `logo-not-found` warning to
+the build report, naming the file and the folder searched — check that folder is
+the workspace's `assets` if a logo you added does not appear.
 
 ### 5. Install the fonts (optional)
 
