@@ -91,10 +91,10 @@ Without a browser, each figure becomes a captioned grey placeholder using the fi
 
 ## Assets
 
-`assets.ts` resolves the three kinds of file a slide can refer to, and the differences between them are deliberate:
+`assets.ts` resolves the three kinds of file a slide can refer to, and the differences between them are deliberate. Which folder it searches comes from the workspace, and `Presentation` resolves one whatever else the caller passes ([decision 0008](decisions/0008-template-library-overrides-templates-only.md)):
 
 - **Icons** — the workspace's `assets/icons/` first, then the ~1,900 Lucide SVGs bundled with the engine. The workspace layer shadows and adds; copying the whole set into every workspace would bloat it and freeze it at init time.
-- **Logos** — the workspace only, never a fallback. Falling back to the install could stamp the tool's placeholder mark onto a client's deck.
+- **Logos** — the workspace only, never a fallback. Falling back to the install could stamp the tool's placeholder mark onto a client's deck. A logo that is asked for and not found is recorded by the resolver and drained into a `logo-not-found` warning at the end of the build, because a deck that quietly loses its brand mark on every slide still looks like a clean build otherwise.
 - **Project paths** — resolved against the deck's own folder.
 
 A bare name like `rocket` is an icon lookup; anything containing a path separator is a project file.

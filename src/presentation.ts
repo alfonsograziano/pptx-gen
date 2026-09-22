@@ -38,7 +38,7 @@ import { FigureRenderer } from "./figure.js";
 import type { ShotFn } from "./html-shot.js";
 import { BuildProgress, dimKind } from "./progress.js";
 import { createAssetResolver, type AssetResolver } from "./assets.js";
-import { installDir, resolveWorkspaceSync, type Workspace } from "./workspace.js";
+import { installDir, resolveWorkspaceSync, tryResolveWorkspaceSync, type Workspace } from "./workspace.js";
 
 // A no-op reporter used when progress output is disabled, so the render path
 // can call the same methods without branching everywhere.
@@ -54,7 +54,8 @@ export type PresentationOptions = {
    * Template library folder. Defaults to the workspace's `templates/`.
    *
    * A relative path resolves against the current working directory, so prefer
-   * leaving this unset and letting the workspace supply it.
+   * leaving this unset and letting the workspace supply it. Setting it moves
+   * the template root only; assets and design still come from the workspace.
    */
   templateLibrary?: string;
   /** The deck's own folder. Defaults to the current working directory. */
@@ -65,8 +66,9 @@ export type PresentationOptions = {
   shot?: ShotFn;
   /**
    * The workspace to take defaults from. Defaults to the one resolved from the
-   * environment. Only consulted for options left unset, so a caller that passes
-   * explicit paths needs no workspace at all.
+   * environment, or none when there is nothing to resolve. Only consulted for
+   * options left unset, so a caller that passes explicit paths needs no
+   * workspace at all.
    */
   workspace?: Workspace;
 };
@@ -85,16 +87,17 @@ export class Presentation {
     this.projectDir = path.resolve(options.projectDir ?? process.cwd());
     this.shot = options.shot;
 
-    // Resolve a workspace only when one is actually needed. A template library
-    // has no sensible default, so a missing one is what forces the lookup;
-    // assets fall back to the engine's own folder, which is where the bundled
-    // icons live anyway. That keeps `new Presentation({ templateLibrary })`
-    // usable with no workspace at all.
-    const workspace =
-      options.templateLibrary === undefined ? (options.workspace ?? resolveWorkspaceSync()) : options.workspace;
+    // Look for a workspace in every case, and never let it be fatal here.
+    // `templateLibrary` overrides the template root and nothing else: it used
+    // to switch this lookup off entirely, which quietly pointed `assetsDir` at
+    // the install and dropped every logo from the deck. A bare checkout with no
+    // workspace anywhere still works, because each option below has an
+    // install-relative fallback.
+    const workspace = options.workspace ?? tryResolveWorkspaceSync();
 
-    // `workspace` is only ever undefined when `templateLibrary` was given, in
-    // which case the left-hand side wins and the fallback is never evaluated.
+    // A template library is the one thing with no fallback, so when neither the
+    // caller nor a workspace supplies one, resolve again strictly to raise
+    // WorkspaceNotFoundError with the list of places it looked.
     this.templateRoot = path.resolve(options.templateLibrary ?? (workspace ?? resolveWorkspaceSync()).templatesDir);
     this.assetsDir = path.resolve(options.assetsDir ?? workspace?.assetsDir ?? path.join(installDir(), "assets"));
     this.assets = createAssetResolver({
@@ -263,6 +266,8 @@ export class Presentation {
       this.renderPreview(output, screenshotDir, warnings)
     );
 
+    this.reportMissingLogos(warnings);
+
     const report: BuildReport = {
       generatedAt: new Date().toISOString(),
       output,
@@ -310,6 +315,24 @@ export class Presentation {
       return renderScreenshots(output, screenshotDir, warnings);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
+    }
+  }
+
+  /**
+   * Turn every logo the slides asked for and did not get into a warning.
+   *
+   * Logos are optional, so this never fails the build — but the old silence
+   * meant a deck could lose its brand mark on every slide and still report a
+   * clean build. The message names the folder that was searched, because the
+   * usual cause is the deck looking in the wrong one.
+   */
+  private reportMissingLogos(warnings: BuildWarning[]): void {
+    for (const fileName of this.assets.missingLogos()) {
+      warnings.push({
+        code: "logo-not-found",
+        message: `Logo '${fileName}' was not found in ${this.assetsDir}, so it was left off the slides that asked for it. Put the file there, or rename it under 'logos' in design.yml.`,
+        target: fileName
+      });
     }
   }
 
@@ -384,6 +407,8 @@ export class Presentation {
     const screenshots = await progress.step("Rendering screenshots (LibreOffice)", () =>
       this.renderPreview(output, screenshotDir, warnings)
     );
+
+    this.reportMissingLogos(warnings);
 
     const report: BuildReport = {
       generatedAt: new Date().toISOString(),

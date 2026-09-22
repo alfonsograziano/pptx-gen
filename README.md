@@ -333,6 +333,12 @@ the exact look they were imported with. To retarget the design to your brand, ed
 `design.ts` and `design.md` together (or run the `customize-design` skill), then
 optionally `npm run install-fonts`.
 
+Logos are the one asset that never falls back to the engine: they come from your
+workspace's `assets/` folder, whatever else a deck script is configured with. A
+logo named in `design.yml` that is not in that folder is left off the slide and
+reported as a `logo-not-found` warning, so a deck cannot lose its brand mark
+quietly.
+
 ### House rules: `customize.md`
 
 `customize.md` in your workspace is where *your* rules live, as opposed to your

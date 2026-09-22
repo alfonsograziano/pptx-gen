@@ -22,6 +22,14 @@ export type AssetResolver = {
   resolveIcon: (reference: string) => string;
   /** Resolve a logo file name; undefined when the workspace does not have it. */
   resolveLogo: (fileName: string) => string | undefined;
+  /**
+   * Every logo file that was asked for and not found, in first-asked order.
+   *
+   * A logo is optional, so a miss must not fail the build — but it must not be
+   * invisible either, or a whole deck ships with no brand mark and nothing in
+   * the output says why. The build drains this into a warning.
+   */
+  missingLogos: () => string[];
   /** Resolve a path written by the deck author, relative to the project. */
   resolveProjectPath: (filePath: string) => string;
   projectDir: string;
@@ -72,10 +80,20 @@ export function createAssetResolver(options: AssetResolverOptions): AssetResolve
     throw new AssetNotFoundError(reference, iconDirs);
   }
 
+  // Insertion-ordered and deduped: one warning per logo file, however many
+  // slides asked for it.
+  const missing = new Set<string>();
+
   function resolveLogo(fileName: string): string | undefined {
     const candidate = path.join(assetsDir, fileName);
-    return existsSync(candidate) ? candidate : undefined;
+    if (existsSync(candidate)) return candidate;
+    missing.add(fileName);
+    return undefined;
   }
 
-  return { resolveIcon, resolveLogo, resolveProjectPath, projectDir, assetsDir, iconDirs };
+  function missingLogos(): string[] {
+    return [...missing];
+  }
+
+  return { resolveIcon, resolveLogo, missingLogos, resolveProjectPath, projectDir, assetsDir, iconDirs };
 }

@@ -43,6 +43,11 @@ See the workspace's `design.md` for the full system. In short:
 - Use sentence case.
 - Content slides open with a header top-left, in sentence case.
 - Use `ink` text on white backgrounds, and white text on `ink` backgrounds.
+- Set a card's text colour with its fill. `addCard` defaults to `ink` text, which
+  suits a light fill; a raised panel on a dark slide needs
+  `{ fill: C.inkSoft, color: C.white, accent: C.accentOnDark }`. Passing a dark
+  fill and leaving the colour alone gives ink text on a dark card, which nobody
+  can read.
 - Do not put small readable text on a vivid accent fill.
 - Use `accent` for accent bars, icons, and rules; use `accent2` / `accent3` for
   diagrams and infographics that need variety.
@@ -249,6 +254,8 @@ export function threeCardSlide(input: {
           body: card.body,
           accent: C.accent,
         });
+        // On a dark slide the same card needs its own text colour:
+        //   fill: C.inkSoft, color: C.white, accent: C.accentOnDark
       });
 
       helpers.addFooter(slide, { light: true });
@@ -689,7 +696,7 @@ const CONSOLE_MOCKUP: Figure = {
   viewport: { width: 1000, height: 560 },
 };
 
-export function operatorViewSlide(pageNum = 1): CustomSlide {
+export function operatorViewSlide(): CustomSlide {
   return new CustomSlide({
     name: "operator-view",
     draw: async ({ slide, helpers, design }) => {
@@ -712,7 +719,7 @@ export function operatorViewSlide(pageNum = 1): CustomSlide {
         { x: FIGURE_BOX.x, y: FIGURE_BOX.y + FIGURE_BOX.h + 0.12, w: FIGURE_BOX.w, h: 0.4 },
         { fontSize: 9, color: colors.muted, italic: true });
 
-      helpers.addFooter(slide, pageNum);
+      helpers.addFooter(slide);
     }
   });
 }

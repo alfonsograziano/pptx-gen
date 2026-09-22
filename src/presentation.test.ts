@@ -2,14 +2,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import os from "node:os";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { Presentation } from "./presentation.js";
 import { CustomSlide } from "./custom-slide.js";
 import { md } from "./rich-text.js";
 import { PptxPackage } from "./pptx-package.js";
 import { getSlideEntries } from "./ooxml.js";
-import { STARTER_TEMPLATES } from "./test-fixtures.js";
+import { STARTER_TEMPLATES, TINY_PNG } from "./test-fixtures.js";
+import { WORKSPACE_ENV_VAR } from "./workspace.js";
 
 const _HERE = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES = STARTER_TEMPLATES;
@@ -223,4 +224,57 @@ test("variant groups work on the all-custom render path", async () => {
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+// A deck that names its own template library must still take logos, icons and
+// design from the workspace. Passing `templateLibrary` used to switch workspace
+// resolution off entirely, which pointed `assetsDir` at the pptx-gen install:
+// every footer lost its logo mark, on every slide, with nothing in the report
+// to say so. Seventeen real build scripts shipped that way.
+test("a deck naming its own templateLibrary still takes assets from the workspace", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "pptx-ws-assets-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const workspace = path.join(root, "workspace");
+  await mkdir(path.join(workspace, "assets"), { recursive: true });
+  await writeFile(path.join(workspace, "pptx-gen.config.yml"), "version: 1\nassets: assets\n", "utf8");
+  // The mark the footer asks for is present; the wordmark deliberately is not.
+  // `addFooter` defaults to a light background and so asks for the dark mark,
+  // while a bare `addWordmark` asks for the light one.
+  await writeFile(path.join(workspace, "assets", "logo-mark-dark.png"), TINY_PNG);
+
+  const previous = process.env[WORKSPACE_ENV_VAR];
+  process.env[WORKSPACE_ENV_VAR] = workspace;
+  t.after(() => {
+    if (previous === undefined) delete process.env[WORKSPACE_ENV_VAR];
+    else process.env[WORKSPACE_ENV_VAR] = previous;
+  });
+
+  const dir = path.join(root, "deck");
+  await mkdir(dir, { recursive: true });
+  const deck = new Presentation({ templateLibrary: TEMPLATES, projectDir: dir });
+  deck.addCustomSlide(
+    new CustomSlide({
+      name: "footer-only",
+      draw: ({ slide, helpers }) => {
+        helpers.addFooter(slide);
+        helpers.addWordmark(slide);
+      }
+    })
+  );
+
+  const report = await deck.render({ output: "deck.pptx", progress: false, screenshots: path.join(dir, "shots") });
+
+  // The workspace logo is in the deck, not silently dropped for the install's.
+  const pkg = await PptxPackage.load(path.join(dir, "deck.pptx"));
+  const media = pkg.files("ppt/media/").filter((file) => file.endsWith(".png"));
+  assert.equal(media.length, 1, `expected the workspace logo in the deck, got ${JSON.stringify(media)}`);
+
+  // And a logo that genuinely is not there says so, rather than going quiet.
+  const missing = report.warnings.filter((warning) => warning.code === "logo-not-found");
+  assert.deepEqual(
+    missing.map((warning) => warning.target),
+    ["logo-wordmark-light.png"]
+  );
+  assert.match(missing[0].message, /design\.yml/);
 });

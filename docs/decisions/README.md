@@ -11,6 +11,8 @@ One file per decision that would be expensive to reverse. They exist so that a c
 | [0005](0005-no-build-step.md) | No build step: TypeScript runs directly |
 | [0006](0006-external-renderers-are-optional.md) | External renderers are optional and degrade to warnings |
 | [0007](0007-any-is-confined-to-the-xml-layer.md) | `any` is confined to the XML layer |
+| [0008](0008-template-library-overrides-templates-only.md) | `templateLibrary` overrides the template root and nothing else |
+| [0009](0009-pptxgenjs-is-loaded-through-require.md) | pptxgenjs is loaded through `require`, lazily |
 
 ## Writing one
 

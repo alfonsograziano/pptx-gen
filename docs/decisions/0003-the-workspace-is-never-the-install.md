@@ -20,7 +20,7 @@ A workspace is any folder containing a `pptx-gen.config.yml`. It is always a sep
 
 - Updating the engine is `git pull` in the clone. Nothing a user owns is in that tree.
 - One install serves any number of workspaces, which is how a brand per client works.
-- Every path-consuming code path needs a workspace, which is why `Presentation` resolves one lazily — pass an explicit `templateLibrary` and it needs none at all, which is how the test suite runs against `test/fixtures/workspace/`.
+- Every path-consuming code path needs a workspace, so `Presentation` looks for one best-effort and falls back per option when there is none. An explicit option overrides only the path it names ([decision 0008](0008-template-library-overrides-templates-only.md)); it never stands in for the workspace as a whole. The test suite points `PPTX_GEN_WORKSPACE` at `test/fixtures/workspace/` for exactly this reason.
 - A missing workspace has to fail well, since it is the first thing a new user hits. `WorkspaceNotFoundError` lists every directory searched and the three ways to fix it.
 - Skills and documentation cannot hardcode paths; they ask `pptx-gen workspace --json` for `templates`, `projects`, `designDoc`, `customize` and the rest.
 - `examples/workspace/` lives inside the repo, which looks like an exception and is not: it is a real workspace kept here as documentation, pointing its `templates` and `assets` back at the install so the repo carries no duplicated binaries.

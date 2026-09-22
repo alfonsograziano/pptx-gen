@@ -152,9 +152,14 @@ into your workspace's `assets/` folder to have them appear automatically:
 | `logo-wordmark-dark.png` | Full wordmark for light backgrounds |
 | `logo-wordmark-light.png` | Full wordmark for dark backgrounds |
 
-If a file is missing, the logo helpers skip it silently. The tool works with no
-logos out of the box. Use PNGs, not SVGs: SVG logos do not embed reliably in
-PowerPoint.
+A missing file never fails a build: the helper leaves the logo off and the build
+report lists a `logo-not-found` warning naming the file and the folder it looked
+in. The tool works with no logos out of the box, so on a workspace that has none
+that warning is just the report saying so. Use PNGs, not SVGs: SVG logos do not
+embed reliably in PowerPoint.
+
+Logos come from the workspace's `assets/` folder and nowhere else, whatever a
+deck script passes as its template library.
 
 ---
 

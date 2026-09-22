@@ -27,9 +27,11 @@ const TINY_PNG = Buffer.from(
   "base64"
 );
 
-// Warnings that depend on the environment (fonts installed, LibreOffice present)
-// and never indicate an actual build defect.
-const ENV_WARNINGS = new Set(["font-not-embedded", "screenshots-skipped"]);
+// Warnings that depend on the environment (fonts installed, LibreOffice
+// present, logo PNGs dropped into the workspace) and never indicate an actual
+// build defect. The fixture workspace ships no logos, so `addFooter` reports a
+// missing mark here exactly as it would on a fresh install.
+const ENV_WARNINGS = new Set(["font-not-embedded", "screenshots-skipped", "logo-not-found"]);
 // Warnings the deck emits by design as it records what it built.
 const INFO_WARNINGS = new Set(["custom-slide-generated"]);
 

@@ -81,6 +81,20 @@ test("a logo comes from the workspace only, and is undefined when absent", async
   assert.equal(assets.resolveLogo("logo-mark-dark.png"), path.join(dirs.assetsDir, "logo-mark-dark.png"));
 });
 
+test("a logo that is not there is recorded once, so the build can warn about it", async (t) => {
+  const dirs = await makeDirs(t);
+  const assets = createAssetResolver(dirs);
+
+  await writeFile(path.join(dirs.assetsDir, "logo-mark-dark.png"), "x", "utf8");
+  assets.resolveLogo("logo-mark-dark.png");
+  // Asked for on two slides; worth one warning, not two.
+  assets.resolveLogo("logo-wordmark-light.png");
+  assets.resolveLogo("logo-wordmark-light.png");
+  assets.resolveLogo("logo-mark-light.png");
+
+  assert.deepEqual(assets.missingLogos(), ["logo-wordmark-light.png", "logo-mark-light.png"]);
+});
+
 test("project paths resolve against the deck folder", async (t) => {
   const dirs = await makeDirs(t);
   const assets = createAssetResolver(dirs);
