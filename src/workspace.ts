@@ -7,7 +7,7 @@
 // serve several workspaces (one per client or brand).
 import os from "node:os";
 import path from "node:path";
-import { existsSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   CONFIG_FILENAME,
@@ -259,9 +259,33 @@ export async function checkWorkspace(workspace: Workspace): Promise<WorkspacePro
     });
   }
 
+  if (!envFileIgnored(workspace.root)) {
+    problems.push({
+      code: "env-not-ignored",
+      message: `${path.join(workspace.root, ".env")} holds secrets (such as OPENAI_API_KEY) but is not listed in .gitignore, so it could be committed.`,
+      fixable: true
+    });
+  }
+
   problems.push(...checkEngineLink(workspace));
 
   return problems;
+}
+
+/**
+ * False only when the workspace has a `.env` that its `.gitignore` does not
+ * cover. `init` ignores it from the start, but a workspace created before
+ * image generation existed has no such line, and `init --force` never rewrites
+ * a `.gitignore` the user may have edited.
+ */
+export function envFileIgnored(root: string): boolean {
+  if (!existsSync(path.join(root, ".env"))) return true;
+  const gitignore = path.join(root, ".gitignore");
+  if (!existsSync(gitignore)) return false;
+  return readFileSync(gitignore, "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .some((line) => /^\/?(\.env|\.env\*|\.env\.\*|\*\.env)$/.test(line));
 }
 
 function checkEngineLink(workspace: Workspace): WorkspaceProblem[] {

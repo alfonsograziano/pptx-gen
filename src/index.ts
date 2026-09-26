@@ -17,6 +17,16 @@ export { FigureRenderer, fitBox } from "./figure.js";
 export type { Figure, FigureFit, FigureResult, FigureViewport } from "./figure.js";
 export { findChrome } from "./html-shot.js";
 export type { ShotFn, ShotRequest } from "./html-shot.js";
+export { generateImages, resolveImageGeneration } from "./image-gen.js";
+export type {
+  GenerateImagesOptions,
+  GenerateImagesSummary,
+  ImageFormat,
+  ImageGenFn,
+  ImageGenRequest,
+  ImageOutcome
+} from "./image-gen.js";
+export type { ImageAspect, ImageRequest } from "./image-brief.js";
 export type {
   AddSlideOptions,
   BuildReport,
@@ -27,6 +37,9 @@ export type {
   RenderOptions,
   SlideOverride,
   FigureRecord,
+  ImageFit,
+  ImageRecord,
+  ImageSource,
   SlideVariables,
   TemplateDeckSlide,
   TemplateField

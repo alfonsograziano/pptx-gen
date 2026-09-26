@@ -35,6 +35,7 @@ import {
   renderCustomSlidesToPptx
 } from "./custom-slide.js";
 import { FigureRenderer } from "./figure.js";
+import { ImageResolver } from "./images.js";
 import type { ShotFn } from "./html-shot.js";
 import { BuildProgress, dimKind } from "./progress.js";
 import { createAssetResolver, type AssetResolver } from "./assets.js";
@@ -137,6 +138,9 @@ export class Presentation {
     // One renderer for the whole build, so a figure used on several slides is
     // rasterized once and a missing browser is reported once.
     const figures = this.makeFigureRenderer(output, options, warnings, progress);
+    // Likewise one image resolver, which reads the brief once and records every
+    // picture placed, whichever kind of slide it lands on.
+    const images = new ImageResolver({ projectDir: this.projectDir, warnings });
 
     const firstTemplate = await loadTemplate(this.templateRoot, firstTemplateSlide.options.templateName);
     const pkg = await PptxPackage.load(firstTemplate.pptxPath);
@@ -169,7 +173,8 @@ export class Presentation {
               pageNum: index + 1,
               assets: this.assets,
               title: this.title,
-              figures
+              figures,
+              images: images.forSlide(index + 1)
             });
 
             const srcPkg = await PptxPackage.load(tempPptx);
@@ -238,7 +243,8 @@ export class Presentation {
             {
               assets: this.assets,
               warnings,
-              figures
+              figures,
+              images: images.forSlide(index + 1)
             }
           );
         }
@@ -277,15 +283,11 @@ export class Presentation {
       slidesBuilt: this.slides.length,
       warnings,
       screenshots,
-      figures: figures.results()
+      figures: figures.results(),
+      images: images.records()
     };
 
-    const reportPath = options.report;
-    if (reportPath) {
-      await progress.step("Writing build report", () =>
-        writeTextFile(path.resolve(this.projectDir, reportPath), formatReport(report, this.projectDir))
-      );
-    }
+    await this.writeReport(report, options, images, progress);
 
     progress.finish({ output, slides: report.slidesBuilt, warnings: warnings.length });
 
@@ -336,6 +338,20 @@ export class Presentation {
     }
   }
 
+  private async writeReport(
+    report: BuildReport,
+    options: RenderOptions,
+    images: ImageResolver,
+    progress: { step: <T>(label: string, fn: () => Promise<T> | T) => Promise<T> }
+  ): Promise<void> {
+    const reportPath = options.report;
+    if (!reportPath) return;
+    const target = path.resolve(this.projectDir, reportPath);
+    await progress.step("Writing build report", () =>
+      writeTextFile(target, formatReport(report, this.projectDir, images.formatReportSection(path.dirname(target))))
+    );
+  }
+
   private makeFigureRenderer(
     output: string,
     options: RenderOptions,
@@ -370,6 +386,7 @@ export class Presentation {
       options.progress === false ? SILENT_PROGRESS : new BuildProgress(this.title ?? "Building deck", expectedSteps);
 
     const figures = this.makeFigureRenderer(output, options, warnings, progress);
+    const images = new ImageResolver({ projectDir: this.projectDir, warnings });
 
     await progress.step(`Rendering ${customSlides.length} custom slide(s) and saving deck`, async () => {
       await renderCustomSlidesToPptx({
@@ -377,7 +394,8 @@ export class Presentation {
         output,
         assets: this.assets,
         title: this.title,
-        figures
+        figures,
+        images
       });
       await figures.prune();
 
@@ -419,15 +437,11 @@ export class Presentation {
       slidesBuilt: customSlides.length,
       warnings,
       screenshots,
-      figures: figures.results()
+      figures: figures.results(),
+      images: images.records()
     };
 
-    const reportPath = options.report;
-    if (reportPath) {
-      await progress.step("Writing build report", () =>
-        writeTextFile(path.resolve(this.projectDir, reportPath), formatReport(report, this.projectDir))
-      );
-    }
+    await this.writeReport(report, options, images, progress);
 
     progress.finish({ output, slides: report.slidesBuilt, warnings: warnings.length });
 
@@ -533,7 +547,7 @@ function formatVariantGroups(report: BuildReport): string {
 // committed alongside a deck reads the same on every machine instead of
 // carrying the home directory of whoever built it. `report.output` itself
 // stays absolute, which is what the console summary wants.
-function formatReport(report: BuildReport, projectDir: string): string {
+function formatReport(report: BuildReport, projectDir: string, imagesSection: string): string {
   const local = (target: string) => {
     const relative = path.relative(projectDir, target);
     return relative && !relative.startsWith("..") ? relative : target;
@@ -556,6 +570,10 @@ ${formatSlidesSection(report)}
 ## Figures
 
 ${formatFigures(report.figures)}
+
+## Images
+
+${imagesSection}
 
 ## Warnings
 

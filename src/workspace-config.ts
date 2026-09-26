@@ -80,7 +80,7 @@ export function parseWorkspaceConfig(raw: string, configPath: string): Workspace
 
   for (const key of Object.keys(record)) {
     if (VALID_KEYS.includes(key)) continue;
-    const suggestion = closestKey(key);
+    const suggestion = closestMatch(key, VALID_KEYS);
     throw new WorkspaceConfigError(
       configPath,
       `unknown key "${key}"${suggestion ? ` — did you mean "${suggestion}"?` : ""} Valid keys: ${VALID_KEYS.join(", ")}.`
@@ -128,11 +128,12 @@ function describe(value: unknown): string {
 }
 
 // A cheap did-you-mean, good enough for single-character slips like
-// "template" -> "templates".
-function closestKey(key: string): string | undefined {
+// "template" -> "templates". Shared with the brief's `## Images` block, whose
+// keys are easy to misspell in exactly the same way.
+export function closestMatch(key: string, candidates: readonly string[]): string | undefined {
   let best: string | undefined;
   let bestDistance = Infinity;
-  for (const candidate of VALID_KEYS) {
+  for (const candidate of candidates) {
     const distance = editDistance(key.toLowerCase(), candidate.toLowerCase());
     if (distance < bestDistance) {
       bestDistance = distance;

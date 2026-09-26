@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { ingestTemplate } from "./ingest.js";
@@ -8,7 +9,15 @@ import { applyDesign, designOrigin } from "./design.js";
 import { readDesignFileSync } from "./design-loader.js";
 import { fixWorkspace, initWorkspace } from "./init.js";
 import { scaffoldProject } from "./scaffold.js";
-import { checkWorkspace, installDir, resolveWorkspaceSync, type Workspace } from "./workspace.js";
+import { checkWorkspace, envFileIgnored, installDir, resolveWorkspaceSync, type Workspace } from "./workspace.js";
+import {
+  type GenerateImagesSummary,
+  generateImages,
+  type ImageFormat,
+  type ImageGeneration,
+  resolveImageGeneration
+} from "./image-gen.js";
+import { BuildProgress } from "./progress.js";
 
 const program = new Command();
 
@@ -83,6 +92,7 @@ program
             design: workspace.designPath,
             designDoc: workspace.designDocPath,
             customize: workspace.customizePath,
+            imageGeneration: describeImageGeneration(resolveImageGeneration(workspace.root)),
             designLoadedFrom: "file" in origin ? origin.file : null,
             customSlideGuide: path.join(workspace.installDir, "custom-template-instructions.md"),
             figureGuide: path.join(workspace.installDir, "figure-instructions.md"),
@@ -148,14 +158,17 @@ program
   .action(async (options, command: Command) => {
     const workspace = workspaceFor(command);
     const problems = await checkWorkspace(workspace);
+    const imagesLine = imageGenerationLine(resolveImageGeneration(workspace.root), workspace);
 
     if (problems.length === 0) {
       console.log(`Workspace is healthy: ${workspace.root}`);
+      console.log(imagesLine);
       return;
     }
 
     console.log(`Workspace: ${workspace.root}`);
     for (const problem of problems) console.log(`  - ${problem.message}`);
+    console.log(imagesLine);
 
     if (!options.fix) {
       console.log("");
@@ -225,6 +238,61 @@ program
   });
 
 program
+  .command("images")
+  .description("Generate the images a deck's brief.md declares (optional: needs OPENAI_API_KEY)")
+  .requiredOption("--project <deck>", "The deck folder, or a deck id in the workspace's projects/")
+  .option("--only <ids>", "Comma-separated image ids to generate; the rest are left alone")
+  .option("--force", "Regenerate even when cached, and replace files put in inputs/ by hand")
+  .option("--dry-run", "Print the composed prompts and target files; call nothing, write nothing")
+  .option("--model <model>", "Image model (default: $PPTX_GEN_IMAGE_MODEL, else gpt-image-2.5-flare)")
+  .option("--quality <quality>", "low, medium, high or auto (default: $PPTX_GEN_IMAGE_QUALITY, else medium)")
+  .option("--format <format>", "jpeg or png", "jpeg")
+  .option("--json", "Machine-readable summary")
+  .action(async (options, command: Command) => {
+    const { projectDir, workspace } = resolveProject(command, options.project);
+
+    // Same reason as `build`: the palette hint must come from THIS workspace's
+    // design, not whichever one the environment pointed at.
+    const patch = readDesignFileSync(workspace.designPath);
+    if (patch) applyDesign(patch);
+
+    const format = parseFormat(options.format);
+    const only = options.only
+      ? String(options.only)
+          .split(",")
+          .map((id: string) => id.trim())
+          .filter(Boolean)
+      : undefined;
+    // Created on the first real generation, so a fully cached run prints no
+    // empty progress header.
+    let progress: BuildProgress | undefined;
+    const quiet = options.json || options.dryRun;
+
+    const summary = await generateImages({
+      projectDir,
+      workspace,
+      only,
+      force: options.force,
+      dryRun: options.dryRun,
+      model: options.model,
+      quality: options.quality,
+      format,
+      step: quiet
+        ? undefined
+        : (label, fn) => {
+            progress ??= new BuildProgress(`Images for ${path.basename(projectDir)}`, 1);
+            return progress.step(label, fn);
+          }
+    });
+
+    if (options.json) {
+      console.log(JSON.stringify(summary, null, 2));
+      return;
+    }
+    printImagesSummary(summary, workspace);
+  });
+
+program
   .command("validate")
   .requiredOption("--pptx <file>", "PPTX file to validate")
   .action(async (options) => {
@@ -238,6 +306,89 @@ program
   .action(() => {
     console.log(installDir());
   });
+
+/** A deck folder, or a deck id under the workspace's projects folder. */
+function resolveProject(command: Command, project: string): { projectDir: string; workspace: Workspace } {
+  const direct = path.resolve(project);
+  if (existsSync(direct) && statSync(direct).isDirectory()) {
+    return { projectDir: direct, workspace: workspaceFor(command, direct) };
+  }
+  const workspace = workspaceFor(command);
+  const projectDir = path.join(workspace.projectsDir, project);
+  if (!existsSync(projectDir)) {
+    throw new Error(`No deck folder at ${direct} or ${projectDir}.`);
+  }
+  return { projectDir, workspace };
+}
+
+function parseFormat(value: string): ImageFormat {
+  const normalized = value.toLowerCase();
+  if (normalized === "jpeg" || normalized === "jpg") return "jpeg";
+  if (normalized === "png") return "png";
+  throw new Error(`--format must be jpeg or png, got "${value}".`);
+}
+
+// The key never leaves resolveImageGeneration's result: only where it came from.
+function describeImageGeneration(generation: ImageGeneration) {
+  return {
+    available: generation.available,
+    model: generation.model,
+    quality: generation.quality,
+    keySource: generation.keySource
+  };
+}
+
+function imageGenerationLine(generation: ImageGeneration, workspace: Workspace): string {
+  if (generation.available) {
+    return `AI images: on (${generation.model}, key from ${generation.keySource === "env" ? "the environment" : ".env"})`;
+  }
+  return `AI images: off — set OPENAI_API_KEY, or put it in ${path.join(workspace.root, ".env")}, to enable \`pptx-gen images\``;
+}
+
+function printImagesSummary(summary: GenerateImagesSummary, workspace: Workspace): void {
+  const local = (file: string) => path.relative(process.cwd(), path.join(summary.projectDir, file)) || file;
+
+  if (summary.images.length === 0) {
+    console.log(`No images declared in the ## Images block of ${summary.briefPath}.`);
+    return;
+  }
+
+  if (summary.dryRun) {
+    console.log(`Dry run — ${summary.model}, ${summary.quality}, ${summary.format}. Nothing was called or written.`);
+    for (const image of summary.images) {
+      console.log("");
+      console.log(`■ ${image.id}  ${image.size} → ${image.files.map(local).join(", ")}`);
+      if (image.references.length > 0) console.log(`  references: ${image.references.join(", ")}`);
+      for (const note of image.notes) console.log(`  ! ${note}`);
+      console.log("");
+      console.log(image.prompt.replace(/^/gm, "  "));
+    }
+    return;
+  }
+
+  console.log("");
+  for (const image of summary.images) {
+    const detail =
+      image.status === "failed" || image.status === "supplied"
+        ? (image.reason ?? "")
+        : image.files.map(local).join(", ");
+    console.log(`  ${image.status.padEnd(9)} ${image.id}  ${detail}`);
+    for (const note of image.notes) console.log(`            ! ${note}`);
+  }
+  console.log("");
+  if (!summary.available) {
+    console.log(imageGenerationLine(resolveImageGeneration(workspace.root), workspace));
+  }
+  if (summary.notesUpdated) console.log(`Notes updated in ${summary.briefPath}`);
+  if (!envFileIgnored(workspace.root)) {
+    console.log(`Warning: ${path.join(workspace.root, ".env")} is not in .gitignore. Run \`pptx-gen doctor --fix\`.`);
+  }
+  if (summary.images.some((image) => image.status === "generated" || image.status === "cached")) {
+    console.log(
+      "Next: rebuild the deck; the images land where build.ts places them, and report.md shows every variant."
+    );
+  }
+}
 
 try {
   await program.parseAsync(process.argv);

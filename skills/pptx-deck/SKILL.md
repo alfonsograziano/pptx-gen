@@ -44,6 +44,7 @@ Use the absolute paths it returns. Referred to below as:
 | `customize` | `customize.md`, this workspace's house rules |
 | `customSlideGuide` | how to design slides from scratch |
 | `figureGuide` | how to author HTML figures |
+| `imageGeneration.available` | whether AI images can be generated here (see 4e) |
 | `engineSpecifier` | what a build script imports (`pptx-gen`) |
 
 If it fails with "No pptx-gen workspace found", stop and ask the user where
@@ -102,7 +103,7 @@ inflate numbers.
 
 Before choosing templates or writing any code, decide what each slide *shows*,
 and write a `## Visuals` section into `brief.md`. One line per visual: the slide
-it belongs to, what it shows, and which of three routes it takes.
+it belongs to, what it shows, and which route it takes.
 
 ```markdown
 ## Visuals
@@ -110,10 +111,11 @@ it belongs to, what it shows, and which of three routes it takes.
 - Slide 3 — Target architecture → native (boxes and arrows, `custom.ts`)
 - Slide 5 — The alerts console as the operator sees it → figure (UI mockup, 1000x560)
 - Slide 7 — Adoption by quarter → figure (bar chart, 1280x720)
+- Slide 8 — A calm harbour at dawn, beside the title → generated image (`harbour-dawn`)
 - Slide 9 — Team photo from the summit → placeholder (only the user has it)
 ```
 
-The three routes, in order of preference:
+The routes, in order of preference:
 
 1. **Native shapes** — anything made of parts a viewer might move or recolor:
    diagrams, flows, cards, timelines, icons, simple labelled charts. This covers
@@ -121,11 +123,17 @@ The three routes, in order of preference:
 2. **Figure** — content with no parts: a product or app UI, a chart with a
    continuous axis or many series, a rendered document or terminal. You author
    the HTML and the engine renders it. See 4d.
-3. **Image placeholder** — real-world imagery only the user has: a photo, a real
-   product screenshot, a client logo. See 4b.
+3. **Generated image** — a photograph or illustration that nobody has to
+   supply and nothing can draw: a scene, a setting, a mood, a texture. Offer this
+   route **only when `imageGeneration.available` is true** in
+   `pptx-gen workspace --json`. See 4e.
+4. **Image placeholder** — real-world imagery only the user has: a photo of
+   *their* team, a real product screenshot, a client logo. See 4b.
 
-A figure is something you can *draw*; a placeholder is something you must be
-*given*.
+A figure is something you can *draw*; a generated image is something you can
+*describe*; a placeholder is something you must be *given*. Never generate a
+picture of something real that the user has — their office, their product,
+their people — because a plausible fake is worse than a grey box.
 
 If the brief also asks for variants of a slide (see 4c), plan the visual once for
 the concept and note which variants carry it — a figure is rendered once and can
@@ -278,7 +286,10 @@ screenshot, a client logo — do not leave a blank gap and do not fake the pictu
 Drop a **placeholder**: a grey box with a centered italic caption saying exactly
 what the image should show, so the user can supply the real asset later.
 
-If you could draw the thing yourself, it is a figure (4d), not a placeholder.
+If you could draw the thing yourself, it is a figure (4d), not a placeholder. If
+it is generic imagery that could be generated, and image generation is available,
+it is a generated image (4e). A declared image that has not been generated yet
+already draws this same placeholder, captioned from its description.
 
 Use the helper on any custom slide:
 
@@ -420,6 +431,99 @@ Rules:
 - Run `npm run install-fonts` before building a deck with figures, or they render
   in a substitute font and will visibly not match the slides.
 
+### 4e. Generated images (AI, made before the build)
+
+A **generated image** is a photograph or illustration made by an image model
+from a description in the brief. It is optional: offer it only when
+`imageGeneration.available` is true in `pptx-gen workspace --json`. When it is
+false, plan those visuals as placeholders (or ask the user for the key) — the
+same declarations still work later.
+
+Generation is **its own command, run before the build** — never call an image
+API from `build.ts`, which must stay deterministic.
+
+**1. Declare each image** in `brief.md`, in a yaml block under `## Images`, and
+point the `## Visuals` line at its id:
+
+````markdown
+## Images
+
+```yaml
+- id: harbour-dawn
+  slide: 8
+  description: A quiet harbour at first light, moored sailing boats on calm water, a low sun over the far shore
+  variants: 3
+  aspect: portrait
+```
+````
+
+Keys: `id` (kebab-case), `description` (required: the scene, concretely),
+`slide`, `variants` (1–4; use 3 when the user wants to choose), `pick` (default
+1), `aspect` (`landscape`, `portrait`, `square`, `wide`) or `size` (`WxH`,
+multiples of 16), `style` (one-off guidance), `references` (project-relative
+example images) and `palette` (`false` drops the brand-colour hint). Match the
+aspect to the box the image will fill.
+
+The workspace-wide look lives in `customize.md`'s `## Image generation`
+section — style prose, `Examples:` paths, `Palette: off` — and applies to every
+prompt. Put per-deck guidance in `style`, and recurring guidance in
+`customize.md` (see "Write recurring requests into it").
+
+**2. Check the prompts, then generate:**
+
+```bash
+pptx-gen images --project <deck-id> --dry-run
+pptx-gen images --project <deck-id>
+```
+
+Files land in `inputs/<id>-<n>.jpg`. A rerun skips unchanged images; `--only
+<id>` limits a run; `--force` regenerates. A file the user put in `inputs/`
+themselves is never overwritten without `--force`.
+
+**3. Place them by id.** On a custom slide:
+
+```ts
+await helpers.addImage(slide, { image: "harbour-dawn" }, { x: 6, y: 0, w: 4, h: 5.625 });
+```
+
+On a cloned slide, `addImage` places a new picture and `replaceImage` fills one
+of the template's picture fields (`type: image` in `fields.yml`):
+
+```ts
+overrides: [
+  { op: "addImage", id: "cover-art", image: "harbour-dawn", x: 6, y: 0, w: 4, h: 5.625 },
+  { op: "replaceImage", target: "picture-3", image: "harbour-dawn" },
+]
+```
+
+Pictures fill their box by default (`fit: "cover"` crops, never distorts);
+`fit: "contain"` shrinks the box to the picture.
+
+**4. Review.** After building, the report's `## Images` section shows every
+variant side by side with the pick marked. Show the user those files and ask
+which they want when there are variants; set `pick` and rebuild — that never
+regenerates.
+
+Rules:
+
+- **Photographs and illustrations only.** Never diagrams, charts, icons, UI or
+  anything with words: those are native (4a) or figures (4d). Every prompt
+  already forbids text in the image; keep titles and messages as slide text.
+- **Describe, don't decorate.** A specific description ("moored sailing boats,
+  low sun over the far shore") beats adjectives. It is also the placeholder
+  caption while the image does not exist.
+- **Respect the budget.** At most one generated image per slide, only where a
+  picture genuinely carries the message; generation costs money and time.
+- **References steer content, not just style.** Scenery from an example image
+  can reappear in the result. Choose examples whose subject you don't mind
+  echoing.
+- **Nothing here fails the deck.** If `pptx-gen images` cannot generate an image
+  — no key, a rejected prompt, a network error — it exits 0, writes a note into
+  `brief.md` under the `## Images` block, and the build draws a captioned
+  placeholder with an `image-missing` warning. Read those notes and pass them on.
+  Only a malformed `## Images` block is an error, and it names the entry and key
+  to fix.
+
 ### 5. Run and self-heal
 
 ```bash
@@ -446,6 +550,10 @@ Check the report's `## Figures` section. Any figure listed as `placeholder` did
 not render — say which ones and why in your final response, because the deck
 shipped a grey box where a picture was meant to be.
 
+Check the report's `## Images` section the same way: an image listed as
+`placeholder` has no file yet. If `pptx-gen images` left notes in `brief.md`,
+they say why.
+
 The report's `## Slides` section lists every slide in deck order and groups any
 variants together with their screenshot filenames. If the deck has variant
 groups, check that each group's variants really do look different, then point the
@@ -454,7 +562,9 @@ user at those screenshots and ask which one they want.
 ## Override operations
 
 `delete`, `hide`, `move`, `resize`, `styleText`, `addText`, `addSvg`, `addIcon`,
-`addImage`, `addFigure`, `replaceImage`, `replaceFigure`. Use layout overrides
+`addImage`, `addFigure`, `replaceImage`, `replaceFigure`. `addImage` and
+`replaceImage` take a `path` (a file that must exist) or an `image` id from the
+brief's `## Images` block (see 4e), plus an optional `fit`. Use layout overrides
 sparingly; if a slide needs many, pick a different template.
 
 ```ts
@@ -475,8 +585,10 @@ deck.addSlideFromTemplate({
 
 Return the absolute path to the final `.pptx`, the report, and the screenshots
 folder (plus `output/figures/` if the deck has figures); any warnings or
-limitations, including every figure that fell back to a placeholder and why; and
-any facts the user must review before using the deck externally.
+limitations, including every figure or image that fell back to a placeholder and
+why (quote the notes `pptx-gen images` left in `brief.md`); and any facts the
+user must review before using the deck externally. If the deck has generated
+images with variants, list each image's variant files and ask which to pick.
 
 If the deck contains variants, list each group with its variants and their
 screenshot filenames, say what distinguishes each layout, and ask the user to

@@ -76,6 +76,9 @@ slides where none does.
   Without it, each figure becomes a captioned grey placeholder and the deck is
   still built. Chromium, Edge, and Brave work too; `CHROME_PATH` names a specific
   binary.
+- **An OpenAI API key (optional).** Only needed to [generate images](#ai-images-optional)
+  with `pptx-gen images`. Without it, each declared image becomes a captioned
+  grey placeholder and the deck is still built.
 
 ## Install
 
@@ -396,6 +399,13 @@ diagrams, icons, cards, timelines — stays native. See
 Without a browser installed the deck still builds, with a captioned grey box in
 each figure's place and a warning in the report.
 
+### Generated images
+
+Photographs and illustrations can be generated with OpenAI's image models before
+the build, then placed by id like any other picture. It is optional, and a deck
+without them still builds, with captioned placeholders. See
+[AI images](#ai-images-optional).
+
 ---
 
 ## Importing your own templates
@@ -423,6 +433,350 @@ it render correctly everywhere, even on a machine that lacks the font.
 
 ---
 
+## AI images (optional)
+
+pptx-gen can generate photographs and illustrations for a deck — a cover
+picture, a scene, a texture — with OpenAI's image models, and place them on
+slides like any other picture.
+
+Generation is a step of its own that you run **before** building. It writes the
+images into the deck's `inputs/` folder; the build then only reads files, so a
+build script never calls the network, needs no key, and rebuilds the same deck
+every time. The feature is optional: without an API key nothing is generated,
+and every image you declared shows up in the deck as a captioned grey
+placeholder.
+
+![A slide with a generated photograph beside native text](examples/workspace/projects/ai-images/preview.jpg)
+
+<sup>From [`examples/workspace/projects/ai-images/`](examples/workspace/projects/ai-images):
+the photograph is generated, the text is native and stays editable.</sup>
+
+### How it fits together
+
+| Step | You | pptx-gen |
+| --- | --- | --- |
+| 1. Declare | Describe each image in the deck's `brief.md`, under `## Images`. | Validates the block; suggests the right key for a typo. |
+| 2. Style (optional) | Say how every image should look in the workspace's `customize.md`. | Adds it, and a hint of your brand colours, to every prompt. |
+| 3. Generate | Run `pptx-gen images --project <deck>`. | Writes `inputs/<id>-1.jpg`, `<id>-2.jpg`, … and remembers what it made. |
+| 4. Place | Put the image on a slide by id in `build.ts`. | Crops it to fill the box, or draws a placeholder if the file is missing. |
+| 5. Pick | Compare the variants in `output/report.md`, set `pick`, rebuild. | Swaps the picture without generating anything. |
+
+When you work through an agent, the `pptx-deck` skill does all of this for you:
+it offers generated images while planning the deck's visuals (only when a key is
+available), writes the `## Images` block, runs the command, and asks you which
+variant to keep.
+
+### Set up
+
+You need an OpenAI API key with access to the image models. pptx-gen looks for
+`OPENAI_API_KEY` in the environment first, then in a `.env` file in the
+**workspace root** (the folder with `pptx-gen.config.yml`):
+
+```bash
+# either export it
+export OPENAI_API_KEY=sk-...
+
+# or keep it with the workspace
+echo 'OPENAI_API_KEY=sk-...' >> ~/decks/.env
+```
+
+`pptx-gen init` adds `.env` to a new workspace's `.gitignore`. For a workspace
+created before this feature, `pptx-gen doctor` reports a `.env` that git could
+pick up, and `pptx-gen doctor --fix` adds the ignore rule. Reading `.env` needs
+Node 20.12 or newer; on older versions, export the variable instead.
+
+Check that it is picked up:
+
+```bash
+pptx-gen doctor
+# ...
+# AI images: on (gpt-image-2.5-flare, key from .env)
+```
+
+The key is never printed, logged or written to disk, and if the API quotes part
+of a rejected key back in an error, that part is removed before the error
+reaches your brief.
+
+### Declare the images
+
+Add an `## Images` section to the deck's `brief.md` with one fenced yaml block,
+one entry per image. `pptx-gen new` scaffolds the section with a commented-out
+example.
+
+````markdown
+## Images
+
+```yaml
+- id: harbour-dawn
+  slide: 1
+  description: A quiet harbour at first light, seen from the waterfront; moored sailing boats on calm water and a low sun rising over the far shore
+  variants: 3
+  pick: 1
+  aspect: portrait
+- id: studio-interior
+  slide: 2
+  description: A bright open-plan design studio in a converted harbour warehouse, people sketching together at a long wooden table
+  aspect: square
+  style: Shot at eye level, the table leading into the picture.
+```
+````
+
+| Key | Required | Default | What it does |
+| --- | --- | --- | --- |
+| `id` | yes | | Kebab-case and unique. Names the files (`inputs/<id>-<n>.jpg`) and is how a slide refers to the image. |
+| `description` | yes | | What the image shows. Be concrete: the scene, the subject, the light. It is the core of the prompt, and the placeholder's caption until the image exists. |
+| `slide` | no | | The slide it is meant for. Only used in the build report. |
+| `variants` | no | `1` | How many takes to generate, 1–4. All come from one API request. |
+| `pick` | no | `1` | Which take the deck uses. |
+| `aspect` | no | `landscape` | `landscape` (1536×1024), `portrait` (1024×1536), `square` (1024×1024) or `wide` (1536×864, 16:9). |
+| `size` | no | | An explicit `WIDTHxHEIGHT` instead of `aspect`, both sides multiples of 16. Not together with `aspect`. |
+| `style` | no | | Extra guidance for this image only, added after the description. |
+| `references` | no | | Example images for this image only: a path or a list of paths, relative to the deck folder. PNG, JPEG or WebP. |
+| `palette` | no | from `customize.md` | `false` leaves the brand-colour hint out of this image's prompt; `true` puts it back in. |
+
+Pick the `aspect` closest to the box the image will fill: it is cropped to fit,
+so a close match loses the least. Point the matching line of the brief's
+`## Visuals` list at the id, e.g. `Slide 1 — The harbour at dawn → generated
+image (harbour-dawn)`.
+
+A mistake in the block — an unknown key, a duplicate id, `pick` larger than
+`variants` — stops `pptx-gen images` with a message naming the entry and the
+key, e.g. `image 'hero': unknown key "varients" — did you mean "variants"?`.
+
+### Set the house style (optional)
+
+Guidance that applies to every image in the workspace goes into `customize.md`,
+in an `## Image generation` section:
+
+```markdown
+## Image generation
+
+Editorial photography with soft, natural light and a calm, optimistic mood.
+Muted tones and clean compositions with generous negative space. Real places
+and people; never illustration or 3D renders.
+
+Examples:
+- assets/image-style/hero.jpg
+- assets/image-style/texture.png
+
+Palette: off
+```
+
+- **The prose** is passed to the model as written (line wraps are joined back
+  into paragraphs; list items keep their own lines).
+- **`Examples:`** lists reference images, relative to the workspace root (`~`
+  and absolute paths work too). They are sent with every image, followed by its
+  own `references`, up to 16 in total. A missing one is noted in the brief and
+  the image is generated without it.
+- **`Palette: off`** drops the brand-colour hint. It is on by default: every
+  prompt ends with a line suggesting your `design.yml` colours (ink and the
+  accents) "where it suits the scene", so the pictures sit well next to the
+  slides without being tinted.
+- HTML comments in the section are ignored, which is how the template that
+  `pptx-gen init` writes explains itself without affecting anything.
+
+Each prompt is put together in a fixed order — description, per-image `style`,
+the house style, the palette line, a note about references when there are any,
+and a closing line asking for the right shape with **no text, lettering,
+captions, logos or watermarks** (words belong on the slide, where they stay
+editable). Run with `--dry-run` to read the exact prompt before paying for it.
+
+### Generate
+
+```bash
+pptx-gen images --project <deck>
+```
+
+`<deck>` is the deck's folder, or its id when you run the command from inside
+the workspace. Output:
+
+```text
+📦 Images for ai-images
+
+  ✓ harbour-dawn  3 variant(s), 1024x1536 14.9s
+  ✓ studio-interior  1 variant(s), 1024x1024 15.9s
+
+  generated harbour-dawn  inputs/harbour-dawn-1.jpg, inputs/harbour-dawn-2.jpg, inputs/harbour-dawn-3.jpg
+  generated studio-interior  inputs/studio-interior-1.jpg
+```
+
+| Option | What it does |
+| --- | --- |
+| `--dry-run` | Prints each composed prompt, its size and target files. Calls nothing, writes nothing, needs no key. |
+| `--only <ids>` | Comma-separated ids to generate; the others and their notes are left alone. |
+| `--force` | Regenerates even when nothing changed, and replaces files you put in `inputs/` yourself. |
+| `--model <model>` | The image model. Default: `$PPTX_GEN_IMAGE_MODEL`, else `gpt-image-2.5-flare`. |
+| `--quality <quality>` | Passed to the API as-is (`low`, `medium`, `high`, `auto`). Default: `$PPTX_GEN_IMAGE_QUALITY`, else `medium`. |
+| `--format <format>` | `jpeg` (default, small files and small decks) or `png`. |
+| `--json` | Prints a machine-readable summary instead, for scripts and agents. |
+| `--workspace <dir>` | Use this workspace instead of the one found from the deck's folder. |
+
+What a run does with each image:
+
+- **generated** — the image was made and written to `inputs/`.
+- **cached** — nothing that affects the result changed since last time, so it
+  was skipped. `inputs/images.lock.json` records a fingerprint of each image's
+  prompt, model, quality, size, format, variant count and reference files. Edit
+  the description, the house style or the brand colours and that image is made
+  again on the next run; change only `pick` and nothing is.
+- **supplied** — a file for this image already exists in `inputs/` and pptx-gen
+  did not make it, so it is yours and is left alone. This is how you replace a
+  generated image with a real photo: save it as `inputs/<id>-<pick>.jpg` (or
+  `.jpeg` / `.png`). `--force` overrides this.
+- **failed** — see [When something goes wrong](#when-something-goes-wrong).
+
+Images are generated one at a time, to stay within the API's per-minute limits.
+Variants the brief no longer asks for (after lowering `variants`, say) are
+deleted, but only files pptx-gen made itself.
+
+Commit `inputs/` — the images and `images.lock.json` — with the deck. Anyone can
+then rebuild it without a key, and a later run knows which images are current.
+
+### Place the images
+
+Refer to an image by its id; the build finds `inputs/<id>-<pick>.jpg` (or
+`.jpeg` / `.png`).
+
+**On a custom slide**, use `helpers.addImage`:
+
+```ts
+// in custom.ts
+await helpers.addImage(slide, { image: "studio-interior" }, { x: 5.6, y: 0.95, w: 3.9, h: 3.9 });
+```
+
+It returns the box it actually used, and takes an optional fourth argument:
+`{ fit, altText }`. The alt text defaults to the image's description.
+
+**On a cloned template slide**, use an override. `addImage` places a new
+picture; `replaceImage` puts the image into a picture the template already has
+(its `type: image` fields in `fields.yml`):
+
+```ts
+deck.addSlideFromTemplate({
+  templateName: "title-cover",
+  variables: { "your-presentation-title-goes-here": "Our new waterfront studio" },
+  overrides: [
+    { op: "resize", target: "your-presentation-title-goes-here", w: 4.7, h: 1.4 },
+    { op: "addImage", id: "cover-art", image: "harbour-dawn", x: 6, y: 0, w: 4, h: 5.625 }
+  ]
+});
+
+// or, into the template's own picture
+{ op: "replaceImage", target: "picture-3", image: "harbour-dawn" }
+```
+
+**How it fills the box** (`fit`):
+
+| `fit` | Result |
+| --- | --- |
+| `cover` (default) | Fills the box exactly and crops the overflow evenly from both sides. Never distorts. For `replaceImage`, the template's box stays exactly where it was. |
+| `contain` | Keeps the whole picture and shrinks the box to its shape, centred in the original. |
+| `stretch` | Fills the box and distorts the picture to fit. |
+
+The same helpers and overrides also take a plain file instead of an id —
+`{ path: "inputs/photo.jpg" }` — for pictures that did not come from the brief.
+A `path` must exist (a missing one fails the build); only an `image` id is
+allowed to be missing.
+
+### Choose between variants
+
+After a build, the `## Images` section of `output/report.md` lists each image,
+the slide it is on, and every variant side by side, with the one in use marked:
+
+```markdown
+## Images
+
+- `harbour-dawn` (meant for slide 1): on slide 1, variant 1 of 3
+  ![harbour-dawn 1 (picked)](../inputs/harbour-dawn-1.jpg) ![harbour-dawn 2](../inputs/harbour-dawn-2.jpg) ![harbour-dawn 3](../inputs/harbour-dawn-3.jpg)
+```
+
+To switch, change `pick` in the brief and rebuild. Nothing is regenerated. If
+none of them work, reword the `description` (or add a `style`) and run
+`pptx-gen images` again; only that image is made again.
+
+### When something goes wrong
+
+Nothing about image generation can stop a deck from building. When an image
+cannot be generated — no key, a rejected prompt, a network error — the command
+still exits 0 and writes a note into the brief, directly under the `## Images`
+block:
+
+```markdown
+<!-- pptx-gen:image-notes:start -->
+> **Image generation notes** — written by `pptx-gen images`. Until each is resolved, the slide shows a grey placeholder.
+>
+> - `studio-interior`: generation failed — OpenAI returned 400 (moderation_blocked): Your request was rejected by the safety system. Rerun `pptx-gen images` to retry.
+<!-- pptx-gen:image-notes:end -->
+```
+
+Each run rewrites the notes for the images it processed and removes the block
+once everything has worked, leaving the rest of the brief untouched. The build,
+meanwhile, puts a grey placeholder in the picture's place — the same one a
+figure falls back to — captioned *Image needed: \<description\>*, and adds an
+`image-missing` warning to the report. So a deck built before its images exist
+already shows what goes where.
+
+A malformed `## Images` block, on the other hand, is an error for the command
+(exit 1), because it is yours to fix. A build that meets one warns (`image-brief-invalid`) and draws placeholders
+instead. A slide that places an id the brief does not declare fails the build,
+with a suggestion if it looks like a typo.
+
+| You see | Why | Fix |
+| --- | --- | --- |
+| `AI images: off` / `OPENAI_API_KEY is not set` | No key in the environment or the workspace `.env`. | Set the key, then rerun `pptx-gen images`. |
+| `OpenAI returned 401 (invalid_api_key)` | The key was rejected. pptx-gen stops calling after the first one. | Check the key, or that it has not been revoked. |
+| `OpenAI returned 429 (insufficient_quota)` | The account has no credit left. Not retried, because waiting will not help. | Add credit to the OpenAI organization the key belongs to. |
+| `OpenAI returned 429` (other codes) | A rate limit. Retried automatically, up to four attempts, honouring the API's `retry-after`. | Usually nothing; on a low-tier account, use fewer `variants` or `--only`. |
+| `OpenAI returned 400 (moderation_blocked)` | The prompt was refused. | Reword the description. |
+| `OpenAI returned 400` mentioning the size | The model does not accept that size. | Use `aspect: landscape`, `portrait` or `square`, which every image model accepts. |
+| `supplied … was left alone` | A file for that id is already in `inputs/` and pptx-gen did not make it. | Keep it, or pass `--force` to replace it. |
+| `image-size-unknown` in the report | The picture is not a PNG or JPEG, so it could not be cropped and was stretched. | Use a PNG or JPEG. |
+| Nothing on the OpenAI usage dashboard | The dashboard shows only the organization and project selected at the top. A key created on a personal account belongs to its personal organization. | Switch the dashboard to the key's organization and project (or "All projects"); usage also shows up with some delay. |
+
+### Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | | Turns the feature on. |
+| `PPTX_GEN_IMAGE_MODEL` | `gpt-image-2.5-flare` | The image model; `--model` wins over it. |
+| `PPTX_GEN_IMAGE_QUALITY` | `medium` | Image quality; `--quality` wins over it. |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Send requests through a proxy or an OpenAI-compatible gateway. |
+
+All four are read from the environment first, then from the workspace `.env`.
+`pptx-gen workspace --json` reports whether generation is available, and with
+which settings, under `imageGeneration` (never the key itself).
+
+Each variant is one generated image and is billed as one, so `variants: 3` costs
+three times `variants: 1`. Quality and size affect the price too; `--dry-run`
+is free.
+
+### Good to know
+
+- **Photographs and illustrations only.** Like a figure, a generated image is a
+  picture, not editable shapes: use it for scenes, settings, moods and
+  textures. Diagrams, charts, icons and interface mockups stay native or become
+  [figures](#figures), and every prompt asks for an image with no text in it.
+- **Never generate something real that you have.** A picture of *your* team,
+  office or product should be the real photo — leave a placeholder and drop the
+  file into `inputs/` when you have it.
+- **References steer the content, not only the style.** Reference images are
+  sent through OpenAI's image-editing endpoint, which uses them as material:
+  scenery from an example can reappear in the result even though the prompt
+  asks for style only. Choose examples whose subject you do not mind echoing.
+- **A rebrand regenerates.** With the palette hint on, changing the colours in
+  `design.yml` changes every prompt, so the next `pptx-gen images` run makes
+  every image again.
+- **From code.** `generateImages()` and `resolveImageGeneration()` are exported
+  from `pptx-gen` for scripts that want to run generation themselves.
+
+See [`examples/workspace/projects/ai-images/`](examples/workspace/projects/ai-images)
+for a complete two-slide deck — a cloned cover and a custom slide — with its
+brief, build script, generated images and lock file, and
+[decision 0010](docs/decisions/0010-generated-images-are-inputs-made-before-the-build.md)
+for why generation is kept out of the build.
+
+---
+
 ## CLI
 
 These are the commands the skills run for you. You can also run them directly.
@@ -433,6 +787,7 @@ pptx-gen workspace [--json]     # show where everything resolves to
 pptx-gen new <deck-id>          # scaffold a deck project
 pptx-gen doctor [--fix]         # check and repair the workspace
 pptx-gen ingest --source <file.pptx> --template <name> [--slide <n> | --split]
+pptx-gen images --project <deck> [--only a,b] [--dry-run] [--force]   # optional, needs OPENAI_API_KEY
 pptx-gen build  --script <project>/build.ts
 pptx-gen validate --pptx <file.pptx>
 ```
@@ -449,7 +804,7 @@ npm run build            # typecheck (tsc --noEmit)
 npm run lint             # lint and format check (Biome); `npm run lint:fix` writes the fixes
 npm run format           # format only
 npm run knip             # report unused files, exports and dependencies
-npm run example          # build the example deck in examples/workspace
+npm run example          # build the example decks in examples/workspace
 npm run install-fonts    # install the design fonts locally (optional)
 npm run show-all-templates
 npm run self-validate    # end-to-end: ingest, build, and check a deck

@@ -119,6 +119,30 @@ A file that is absent leaves the logo off and adds a `logo-not-found` warning to
 the build report, naming the file and the folder searched — check that folder is
 the workspace's `assets` if a logo you added does not appear.
 
+### 4a. Set the look of generated images (optional)
+
+If the workspace uses AI image generation (`pptx-gen images`), its look is set
+in `customize.md`, not `design.yml`, under an `## Image generation` section:
+
+```markdown
+## Image generation
+
+Editorial photography with soft, natural light and a calm, optimistic mood.
+Muted tones and clean compositions with generous negative space.
+
+Examples:
+- assets/image-style/hero.jpg
+
+Palette: off
+```
+
+The prose goes into every prompt. `Examples:` lists reference images, relative
+to the workspace root; they steer content as well as style, so choose ones whose
+subject you don't mind echoing. The brand palette from `design.yml` is added to
+every prompt as a soft hint, and `Palette: off` removes it. A rebrand that
+changes the palette also changes the hint, which regenerates every image on the
+next `pptx-gen images` run.
+
 ### 5. Install the fonts (optional)
 
 Needed only for crisp local screenshots and native editing; generated decks embed

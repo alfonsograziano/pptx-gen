@@ -7,6 +7,7 @@ import { createCustomSlideHelpers, type CustomSlideHelpers } from "./custom-slid
 import type { FigureRenderer } from "./figure.js";
 import { ensureDir } from "./fs.js";
 import type { AssetResolver } from "./assets.js";
+import type { ImageResolver, SlideImages } from "./images.js";
 
 type Pptx = {
   defineLayout: (layout: { name: string; width: number; height: number }) => void;
@@ -96,6 +97,8 @@ export async function renderCustomSlideToPptx(options: {
   assets: AssetResolver;
   title?: string;
   figures?: FigureRenderer;
+  /** The build's picture resolver, bound to this slide's position in the deck. */
+  images?: SlideImages;
 }): Promise<void> {
   const pptx = createCustomPresentation(options.title);
   const slide = pptx.addSlide();
@@ -103,7 +106,8 @@ export async function renderCustomSlideToPptx(options: {
   const helpers = createCustomSlideHelpers({
     assets: options.assets,
     shapeType: pptx.ShapeType,
-    figures: options.figures
+    figures: options.figures,
+    images: options.images
   });
 
   await options.customSlide.draw({
@@ -127,17 +131,20 @@ export async function renderCustomSlidesToPptx(options: {
   assets: AssetResolver;
   title?: string;
   figures?: FigureRenderer;
+  images?: ImageResolver;
 }): Promise<void> {
   const pptx = createCustomPresentation(options.title);
-  const helpers = createCustomSlideHelpers({
-    assets: options.assets,
-    shapeType: pptx.ShapeType,
-    figures: options.figures
-  });
 
   for (const [index, customSlide] of options.customSlides.entries()) {
     const slide = pptx.addSlide();
     applyBackground(slide, customSlide.background);
+    // Per slide, so every picture a slide places is recorded against it.
+    const helpers = createCustomSlideHelpers({
+      assets: options.assets,
+      shapeType: pptx.ShapeType,
+      figures: options.figures,
+      images: options.images?.forSlide(index + 1)
+    });
     await customSlide.draw({
       pptx,
       slide,

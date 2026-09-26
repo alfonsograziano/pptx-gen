@@ -5,7 +5,7 @@
 // gone missing (after a move, or a checkout without node_modules).
 import path from "node:path";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { appendFile, cp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { CONFIG_FILENAME } from "./workspace-config.js";
 import { currentDesign } from "./design.js";
 import { serializeDesign } from "./design-loader.js";
@@ -59,6 +59,19 @@ writes it here, so you only have to say it once.
 ## Rules
 
 <!-- One bullet per rule. Say what to do, and when it applies. -->
+
+## Image generation
+
+<!-- Optional. How images made by \`pptx-gen images\` should look, for every deck
+in this workspace. A few sentences of style, then example images to match
+(paths relative to this folder), for example:
+
+Editorial photography, soft natural light, muted tones, plenty of negative space.
+
+Examples:
+- assets/image-style/hero.jpg
+
+Palette: off   (leaves the brand-colour hint out of every prompt) -->
 `;
 
 const GITIGNORE_TEMPLATE = `# The link to the pptx-gen engine, recreated by \`pptx-gen doctor --fix\`.
@@ -69,6 +82,9 @@ projects/*/output/screenshots/
 projects/*/output/**/*.pdf
 **/screenshots/*.pdf
 templates-preview/
+
+# Secrets, such as OPENAI_API_KEY for \`pptx-gen images\`.
+.env
 `;
 
 /** Create (or repair, with `force`) a workspace. */
@@ -166,6 +182,16 @@ export async function fixWorkspace(workspace: Workspace, problems: WorkspaceProb
     } else if (problem.code === "missing-customize") {
       await writeFile(workspace.customizePath, CUSTOMIZE_TEMPLATE, "utf8");
       fixed.push(`Wrote ${workspace.customizePath}`);
+    } else if (problem.code === "env-not-ignored") {
+      const gitignore = path.join(workspace.root, ".gitignore");
+      const current = existsSync(gitignore) ? await readFile(gitignore, "utf8") : "";
+      const separator = current === "" || current.endsWith("\n") ? "" : "\n";
+      await appendFile(
+        gitignore,
+        `${separator}${current ? "\n" : ""}# Secrets, such as OPENAI_API_KEY.\n.env\n`,
+        "utf8"
+      );
+      fixed.push(`Added .env to ${gitignore}`);
     } else if (problem.code.endsWith("engine-link")) {
       const link = await linkEngine(workspace.root);
       fixed.push(`Linked ${link} -> ${installDir()}`);

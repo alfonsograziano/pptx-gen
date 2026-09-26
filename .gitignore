@@ -33,9 +33,11 @@ _bmad/config.user.toml
 # .claude/ (installed skills, for instance) is tracked on purpose.
 .claude/worktrees/
 
-# Secrets. The engine reads no credentials today — PPTX_GEN_WORKSPACE,
-# PPTX_GEN_NO_AUTOLOAD and CHROME_PATH are the only variables it looks at, and
-# none is sensitive. These rules are here so that can stop being true safely.
+# Secrets. The one credential the engine reads is OPENAI_API_KEY, for the
+# optional `pptx-gen images` — from the environment, or a workspace's .env.
+# Everything else it reads (PPTX_GEN_WORKSPACE, PPTX_GEN_NO_AUTOLOAD,
+# CHROME_PATH, SOFFICE_PATH, PPTX_GEN_IMAGE_MODEL, PPTX_GEN_IMAGE_QUALITY,
+# OPENAI_BASE_URL) is not sensitive.
 .env
 .env.*
 !.env.example
