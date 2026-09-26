@@ -30,7 +30,7 @@
     "knip": "knip",
     "check": "npm run lint && npm run build && npm test && npm run knip",
     "cli": "tsx src/cli.ts",
-    "example": "tsx src/cli.ts doctor --fix --workspace examples/workspace && tsx src/cli.ts build --script examples/workspace/projects/how-it-works/build.ts && tsx src/cli.ts build --script examples/workspace/projects/figure-mockup/build.ts",
+    "example": "tsx src/cli.ts doctor --fix --workspace examples/workspace && tsx src/cli.ts build --script examples/workspace/projects/how-it-works/build.ts && tsx src/cli.ts build --script examples/workspace/projects/figure-mockup/build.ts && tsx src/cli.ts build --script examples/workspace/projects/ai-images/build.ts",
     "ensure-fonts": "tsx src/install-fonts.ts",
     "install-fonts": "tsx src/install-fonts.ts",
     "show-all-templates": "tsx src/show-all-templates.ts",

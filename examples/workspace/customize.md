@@ -10,3 +10,10 @@ writes it here, so you only have to say it once.
 ## Rules
 
 <!-- One bullet per rule. Say what to do, and when it applies. -->
+
+## Image generation
+
+Editorial photography with soft, natural light and a calm, optimistic mood.
+Muted, slightly desaturated tones and clean compositions with generous negative
+space. Real places and people; never illustration, 3D renders or stock-photo
+poses.

@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "images": {
+    "harbour-dawn": {
+      "hash": "487c2f8fc45305a7fc63f4ba224c141bdab53083d50d2be79b7f41d3eea47c4e",
+      "model": "gpt-image-2.5-flare",
+      "quality": "medium",
+      "size": "1024x1536",
+      "format": "jpeg",
+      "variants": 3,
+      "prompt": "A quiet harbour at first light, seen from the waterfront; moored sailing boats on calm water and a low sun rising over the far shore\n\nStyle: Editorial photography with soft, natural light and a calm, optimistic mood. Muted, slightly desaturated tones and clean compositions with generous negative space. Real places and people; never illustration, 3D renders or stock-photo poses.\n\nBrand colours: where it suits the scene, lean on #12182B (ink), #3B82F6 (accent), #8B5CF6 (accent2), #0EA5E9 (accent3).\n\nFormat: a portrait (2:3) image for a presentation slide. No text, lettering, captions, logos or watermarks.",
+      "references": [],
+      "files": [
+        "inputs/harbour-dawn-1.jpg",
+        "inputs/harbour-dawn-2.jpg",
+        "inputs/harbour-dawn-3.jpg"
+      ]
+    },
+    "studio-interior": {
+      "hash": "e754c3c7c790bc6d045f911a4301cd407ba6b9042d8e2b33763945ce4f03c0e4",
+      "model": "gpt-image-2.5-flare",
+      "quality": "medium",
+      "size": "1024x1024",
+      "format": "jpeg",
+      "variants": 1,
+      "prompt": "A bright open-plan design studio in a converted harbour warehouse, people sketching together at a long wooden table, tall windows looking out onto the water\n\nStyle: Editorial photography with soft, natural light and a calm, optimistic mood. Muted, slightly desaturated tones and clean compositions with generous negative space. Real places and people; never illustration, 3D renders or stock-photo poses.\n\nBrand colours: where it suits the scene, lean on #12182B (ink), #3B82F6 (accent), #8B5CF6 (accent2), #0EA5E9 (accent3).\n\nFormat: a square image for a presentation slide. No text, lettering, captions, logos or watermarks.",
+      "references": [],
+      "files": [
+        "inputs/studio-interior-1.jpg"
+      ]
+    }
+  }
+}
