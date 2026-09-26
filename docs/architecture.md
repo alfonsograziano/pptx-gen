@@ -11,7 +11,7 @@ Both kinds end up in the same output deck, because both are reduced to the same 
 
 | Entry point | What it is |
 | --- | --- |
-| `bin/pptx-gen.mjs` → `src/cli.ts` | The CLI. Commander, eight commands: `init`, `workspace`, `where`, `new`, `doctor`, `ingest`, `build`, `validate`. |
+| `bin/pptx-gen.mjs` → `src/cli.ts` | The CLI. Commander, nine commands: `init`, `workspace`, `where`, `new`, `doctor`, `ingest`, `images`, `build`, `validate`. |
 | `src/index.ts` | The public API. A deck's own `build.ts` imports `Presentation`, `CustomSlide`, the design tokens and the helpers from here. Anything not exported from `index.ts` is internal and may change. |
 
 `pptx-gen build --script <file>` is a thin wrapper over the second: it resolves the workspace, applies its design, then imports the script, which does its own `deck.render(...)`.
@@ -44,6 +44,7 @@ The consequence is a real ordering rule, stated in `src/cli.ts`: when `--workspa
 | Scratch slides | `custom-slide.ts`, `custom-slide-helpers.ts`, `svg-path.ts` | Draw a slide with pptxgenjs; convert SVG paths into native custom-geometry shapes. |
 | Design | `design.ts`, `design-loader.ts`, `design-tokens.ts` | The live token values, reading a `design.yml`, and the token vocabulary. `design-tokens.ts` imports nothing, which keeps the other two from depending on each other. |
 | Figures | `figure.ts`, `html-shot.ts` | Render author-written HTML to a PNG with headless Chrome. |
+| Generated images | `image-brief.ts`, `image-gen.ts`, `images.ts` | Read the brief's `## Images` block and compose prompts; call the image API (`pptx-gen images`, before the build); resolve images to files, or placeholders, at build time. |
 | Environment | `workspace.ts`, `workspace-config.ts`, `assets.ts`, `fonts.ts`, `install-fonts.ts`, `exec.ts`, `fs.ts` | Where things live and how to reach them. |
 | Output | `render.ts`, `progress.ts` | LibreOffice screenshots; live terminal progress. |
 | Setup | `init.ts`, `scaffold.ts` | `pptx-gen init` and `pptx-gen new`. |
@@ -54,12 +55,12 @@ The consequence is a real ordering rule, stated in `src/cli.ts`: when `--workspa
 
 1. **Pick a base package.** The first template slide's `template.pptx` is loaded and becomes the deck under construction. Its own slide entries are captured up front, so a later slide reusing the same template still sees the template's slides rather than the deck as it has grown.
 2. **Append each slide in order.** Every template package is a single-slide slice sharing an identical support chain — layouts, masters, themes, fonts — with the base, which is what makes `appendSlideFromPackage` safe. A custom slide is first drawn to a throwaway single-slide `.pptx` by pptxgenjs, then appended through exactly the same call. From here on the pipeline cannot tell the two kinds apart.
-3. **Fill and edit template slides.** `fillSlideText` writes the variables into the fields recorded in `fields.yml`; `convertTemplatePageNumber` swaps a field tagged `role: page-number` for a live PowerPoint slide-number field; `applyOverrides` applies the explicit edit operations — `delete`, `hide`, `move`, `resize`, `styleText`, `addText`, `addSvg`, `addIcon`, `addImage`, `replaceImage`, `addFigure`, `replaceFigure`.
+3. **Fill and edit template slides.** `fillSlideText` writes the variables into the fields recorded in `fields.yml`; `convertTemplatePageNumber` swaps a field tagged `role: page-number` for a live PowerPoint slide-number field; `applyOverrides` applies the explicit edit operations — `delete`, `hide`, `move`, `resize`, `styleText`, `addText`, `addSvg`, `addIcon`, `addImage`, `replaceImage`, `addFigure`, `replaceFigure`. `addImage` and `replaceImage` take either a `path` or an `image` id from the brief (see *Generated images* below).
 4. **Carry fonts across.** `mergeEmbeddedFonts` copies any typeface a source slide embeds that the base lacks, so the delivered deck is self-contained.
 5. **Assemble.** Unused figure files are pruned, `keepOnlySlides` trims the base down to the slides actually built, `applySlideNumbering` settles numbering now that the order is final, and the package is saved.
 6. **Validate.** `validatePackage` re-opens the written file and checks it is a coherent package.
 7. **Screenshot** (optional). LibreOffice converts the deck to PDF and `pdf-to-img` turns each page into a PNG. Absent LibreOffice, this is skipped with a warning and the build still succeeds ([decision 0006](decisions/0006-external-renderers-are-optional.md)). The copy that is shot has its slide-number fields flattened first, because LibreOffice resolves `slidenum` fields but ignores the deck's `firstSlideNum` offset and would otherwise show a number one too high on every slide of a deck with a cover. The delivered file keeps its live fields.
-8. **Report.** A `BuildReport` records every slide in output order, variant-group membership, templates and custom slides used, figures and their status, and every warning. `output/report.md` is the human-readable form, and it is the artifact a reviewing agent reads to decide whether the deck is right.
+8. **Report.** A `BuildReport` records every slide in output order, variant-group membership, templates and custom slides used, figures and their status, pictures placed (and which fell back to placeholders), and every warning. `output/report.md` is the human-readable form, and it is the artifact a reviewing agent reads to decide whether the deck is right.
 
 Nothing in the pipeline throws on a degraded result. Anything recoverable becomes a `BuildWarning` with a `code`, and the deck is still produced — see the warning codes scattered through `ooxml.ts`, `figure.ts` and `render.ts`.
 
@@ -89,6 +90,19 @@ Caching is content-addressed: the PNG's filename carries a hash of the generated
 
 Without a browser, each figure becomes a captioned grey placeholder using the figure's own `caption` — which is why the caption is specified as a sentence written for a reader, not a label.
 
+## Generated images
+
+Photographs and illustrations come from an image model, and are made **before** the build by `pptx-gen images`, never during it ([decision 0010](decisions/0010-generated-images-are-inputs-made-before-the-build.md)). Build scripts stay offline and deterministic; the build only ever reads files.
+
+1. **Declare.** The deck's `brief.md` holds a fenced yaml block under `## Images`: one entry per image, with an `id`, a `description`, and optionally `variants` (1–4), `pick`, `aspect` or `size`, `style`, `references` and `palette`. `image-brief.ts` parses and validates it, with a did-you-mean for misspelled keys.
+2. **Style.** The workspace's `customize.md` may carry an `## Image generation` section: style prose, an `Examples:` list of reference images, and a `Palette: off` switch. The brand palette is otherwise added as a soft hint.
+3. **Generate.** `image-gen.ts` composes one prompt per image — the same inputs always give the same text — and calls the OpenAI Images API with plain `fetch`: `/images/generations`, or `/images/edits` with `image[]` parts when there are references. Rate limits and server errors retry with backoff; a rejected prompt or key fails at once. Variants land in `inputs/<id>-<n>.jpg`, and `inputs/images.lock.json` hashes everything that shapes each result, so an unchanged image is never regenerated and changing only `pick` costs nothing. A file in `inputs/` the lock does not own is a person's, and is left alone without `--force`.
+4. **Place.** `images.ts` is the build side. `ImageResolver` reads the brief once per build, finds `inputs/<id>-<pick>.{jpg,jpeg,png}`, and records every placement for the report, which shows each image's variants side by side. Custom slides call `helpers.addImage(slide, { image }, box)`; cloned slides use the `addImage` and `replaceImage` overrides. The default fit is `cover`, a crop with no distortion: pptxgenjs's `sizing` on custom slides, an `<a:srcRect>` on cloned ones.
+
+The feature is optional twice over. With no `OPENAI_API_KEY` (from the environment, or the workspace `.env` read through `util.parseEnv`) the command generates nothing and exits 0. And whenever a declared image has no file, the build draws the figure placeholder with an `Image needed: <description>` caption and an `image-missing` warning — worded the same whatever the environment, because the build never looks for the key. Failures from the command are written into a managed notes block under the brief's yaml fence, so whoever reads the brief next sees why a slide has a grey box.
+
+A `path` still means "this file exists", so a missing one still fails the build; only an `image` id may be missing.
+
 ## Assets
 
 `assets.ts` resolves the three kinds of file a slide can refer to, and the differences between them are deliberate. Which folder it searches comes from the workspace, and `Presentation` resolves one whatever else the caller passes ([decision 0008](decisions/0008-template-library-overrides-templates-only.md)):
@@ -103,6 +117,6 @@ A bare name like `rocket` is an icon lookup; anything containing a path separato
 
 Tests live next to the code they test as `src/*.test.ts` and run on `node --test` with types stripped by tsx. `npm test` sets `PPTX_GEN_WORKSPACE=test/fixtures/workspace` so the suite always resolves a known workspace rather than whatever happens to be on the machine.
 
-The suite works on real inputs — it loads the actual starter templates, builds real decks and re-opens the results. There is no mocking framework. The one seam that is injected is `ShotFn`, the figure rasterizer, so figure behaviour (including the no-browser path) can be tested without a browser installed.
+The suite works on real inputs — it loads the actual starter templates, builds real decks and re-opens the results. There is no mocking framework. Two seams are injected: `ShotFn`, the figure rasterizer, so figure behaviour (including the no-browser path) can be tested without a browser installed; and `ImageGenFn` (or `fetch`, one level down), so image generation — caching, notes, retries, the no-key path — is tested without the network. Tests that spawn the CLI blank `OPENAI_API_KEY`, so a developer's own key never reaches them.
 
 `npm run check` is the whole gate: Biome, `tsc --noEmit`, the tests, then Knip for dead code. There is no CI, so it is the only gate.

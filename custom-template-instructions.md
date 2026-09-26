@@ -736,6 +736,52 @@ Rules:
 
 A complete worked deck is in `examples/workspace/projects/figure-mockup/`.
 
+## Example 9b: a generated photograph beside native text (NOT editable in Google Slides)
+
+For a photograph or illustration nobody has to supply — a scene, a setting, a
+mood — declare it in the brief's `## Images` block and let `pptx-gen images`
+generate it before the build (only when `imageGeneration.available` is true in
+`pptx-gen workspace --json`). The build script only places it, by id:
+
+```ts
+import { CustomSlide, FONTS, LAYOUT, C } from "pptx-gen";
+
+// A square against the right margin, above the footer.
+const PICTURE = { x: 5.6, y: 0.95, w: 3.9, h: 3.9 };
+
+export function studioSlide(): CustomSlide {
+  return new CustomSlide({
+    name: "studio-interior",
+    draw: async ({ slide, helpers }) => {
+      helpers.addHeader(slide, "The studio");
+      slide.addText("Room to think, right by the water", {
+        x: LAYOUT.LM, y: 1.05, w: 4.4, h: 1.1, fontSize: 24, fontFace: FONTS.serif, color: C.ink, margin: 0
+      });
+
+      // Fills the box, cropping rather than distorting. Until the image has been
+      // generated, draws a grey placeholder captioned with its description.
+      await helpers.addImage(slide, { image: "studio-interior" }, PICTURE);
+
+      helpers.addFooter(slide);
+    }
+  });
+}
+```
+
+`helpers.addImage(slide, source, box, { fit?, altText? })` takes `{ image: "<id>" }`
+or `{ path: "inputs/photo.jpg" }` (a file that must exist). `fit` is `"cover"`
+(the default), `"contain"` or `"stretch"`. It returns the box actually used.
+
+Rules:
+
+- **Photographs and illustrations only**, never diagrams, charts, icons or text.
+  The words stay on the slide.
+- Declare the image with an `aspect` close to the box's shape, so the crop is
+  small.
+- At most one generated image per slide.
+
+A complete worked deck is in `examples/workspace/projects/ai-images/`.
+
 ## Example 10: code panel
 
 Use this for API snippets, scorer examples, JSON contracts, or configuration.
@@ -890,7 +936,7 @@ export function exerciseSlide(input: {
 ## Diagram guidance
 
 - Build diagrams from native shapes, lines, and text so they stay editable in Google Slides. Do not render a diagram as one SVG/PNG image, and never as a figure — a diagram is all parts.
-- For content you can draw but not with shapes — an app screen, a chart, a rendered document — author an HTML **figure** (see the `figureGuide` file). For real-world imagery only the user has (a photo, a real product screenshot, a client logo), do not fake it: drop `helpers.addImagePlaceholder(slide, { x, y, w, h, caption })` — a grey box with a centered italic caption describing what belongs there — so they can supply the asset later. Write a specific caption either way. The difference: a figure is something you can *draw*; a placeholder is something you must be *given*.
+- For content you can draw but not with shapes — an app screen, a chart, a rendered document — author an HTML **figure** (see the `figureGuide` file). For real-world imagery only the user has (a photo, a real product screenshot, a client logo), do not fake it: drop `helpers.addImagePlaceholder(slide, { x, y, w, h, caption })` — a grey box with a centered italic caption describing what belongs there — so they can supply the asset later. Write a specific caption either way. For generic imagery that can be described — a scene, a setting, a texture — generate it instead when image generation is available, and place it with `helpers.addImage(slide, { image: "<id>" }, box)` (Example 9b). The difference: a figure is something you can *draw*; a generated image is something you can *describe*; a placeholder is something you must be *given*.
 - Use `addVectorIcon` / `addIcon` for icons (native custom geometry), never icons-as-images.
 - Use boxes for systems, services, actors, or steps.
 - Use arrows for data flow, control flow, or sequence.
