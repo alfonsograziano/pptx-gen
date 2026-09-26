@@ -23,8 +23,17 @@ const TSX_LOADER = import.meta.resolve("tsx");
 async function cli(args: string[], cwd = INSTALL): Promise<{ stdout: string; stderr: string }> {
   return execFileAsync(process.execPath, ["--import", TSX_LOADER, CLI, ...args], {
     cwd,
-    // Cleared so the suite's own pinned workspace cannot leak into these runs.
-    env: { ...process.env, PPTX_GEN_WORKSPACE: "", PPTX_GEN_NO_AUTOLOAD: "" }
+    // Cleared so the suite's own pinned workspace, and a developer's own image
+    // generation key, cannot leak into these runs.
+    env: {
+      ...process.env,
+      PPTX_GEN_WORKSPACE: "",
+      PPTX_GEN_NO_AUTOLOAD: "",
+      OPENAI_API_KEY: "",
+      OPENAI_BASE_URL: "",
+      PPTX_GEN_IMAGE_MODEL: "",
+      PPTX_GEN_IMAGE_QUALITY: ""
+    }
   });
 }
 
@@ -110,6 +119,12 @@ test("workspace --json reports absolute paths and the engine specifier", async (
   assert.equal(info.engineSpecifier, "pptx-gen");
   assert.equal(info.ok, true);
   assert.deepEqual(info.problems, []);
+  assert.deepEqual(info.imageGeneration, {
+    available: false,
+    model: "gpt-image-2.5-flare",
+    quality: "medium",
+    keySource: null
+  });
 
   for (const [key, value] of Object.entries(info)) {
     if (typeof value === "string" && key !== "engineSpecifier" && key !== "source") {
@@ -131,6 +146,67 @@ test("doctor --fix repairs a broken engine link", async (t) => {
 
   const after = await cli(["doctor", "--workspace", root]);
   assert.match(after.stdout, /Workspace is healthy/);
+  assert.match(after.stdout, /AI images: off — set OPENAI_API_KEY/);
+});
+
+test("doctor --fix keeps a workspace .env out of git", async (t) => {
+  const root = path.join(await tempDir(t), "decks");
+  await cli(["init", root]);
+  assert.match(await readFile(path.join(root, ".gitignore"), "utf8"), /^\.env$/m, "a new workspace ignores it already");
+
+  // A workspace from before image generation: its .gitignore never mentions .env.
+  await writeFile(path.join(root, ".gitignore"), "node_modules/", "utf8");
+  await writeFile(path.join(root, ".env"), "OPENAI_API_KEY=sk-test\n", "utf8");
+  await assert.rejects(
+    () => cli(["doctor", "--workspace", root]),
+    (error: Error & { stdout?: string }) => {
+      assert.match(error.stdout ?? "", /\.env holds secrets .* not listed in \.gitignore/);
+      assert.doesNotMatch(error.stdout ?? "", /sk-test/, "the key itself is never printed");
+      return true;
+    }
+  );
+
+  await cli(["doctor", "--fix", "--workspace", root]);
+  assert.equal(
+    await readFile(path.join(root, ".gitignore"), "utf8"),
+    "node_modules/\n\n# Secrets, such as OPENAI_API_KEY.\n.env\n"
+  );
+  const after = await cli(["doctor", "--workspace", root]);
+  assert.match(after.stdout, /Workspace is healthy/);
+  assert.match(after.stdout, /AI images: on \(gpt-image-2\.5-flare, key from \.env\)/);
+});
+
+test("images composes prompts on a dry run, and without a key notes why in the brief", async (t) => {
+  const root = path.join(await tempDir(t), "decks");
+  await cli(["init", root]);
+  await cli(["new", "harbour", "--workspace", root]);
+  const briefPath = path.join(root, "projects", "harbour", "brief.md");
+  const stub = await readFile(briefPath, "utf8");
+  assert.match(stub, /## Images/, "the scaffolded brief shows where images go");
+  await writeFile(
+    briefPath,
+    stub.replace(
+      /## Images\n[\s\S]*$/,
+      "## Images\n\n```yaml\n- id: harbour\n  description: A calm harbour at dawn\n```\n"
+    ),
+    "utf8"
+  );
+
+  const dry = await cli(["images", "--project", "harbour", "--workspace", root, "--dry-run"]);
+  assert.match(dry.stdout, /■ harbour {2}1536x1024/);
+  assert.match(dry.stdout, /A calm harbour at dawn/);
+  assert.match(dry.stdout, /Brand colours: where it suits the scene/);
+
+  // No key: the command still succeeds, because generation is optional.
+  const { stdout } = await cli(["images", "--project", path.join(root, "projects", "harbour")]);
+  assert.match(stdout, /failed {4}harbour {2}OPENAI_API_KEY is not set\./);
+  assert.match(stdout, /AI images: off/);
+  assert.match(await readFile(briefPath, "utf8"), /> - OPENAI_API_KEY is not set, so `harbour` was not generated\./);
+
+  const json = JSON.parse((await cli(["images", "--project", "harbour", "--workspace", root, "--json"])).stdout);
+  assert.equal(json.available, false);
+  assert.equal(json.images[0].status, "failed");
+  assert.ok(!("apiKey" in json), "the summary carries no key");
 });
 
 test("doctor --fix restores a deleted customize.md", async (t) => {

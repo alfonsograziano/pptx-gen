@@ -105,6 +105,19 @@ List every figure with its source. Do not invent facts or inflate numbers.
 | Claim | Number | Source |
 | --- | --- | --- |
 | TODO | TODO | TODO |
+
+## Images
+
+<!-- Optional: photos or illustrations for \`pptx-gen images\` to generate (it
+needs OPENAI_API_KEY). Declare each one in a yaml block here, then run
+\`pptx-gen images --project <this folder>\`. For example:
+
+\`\`\`yaml
+- id: hero-city
+  description: Aerial view of a European city at dawn, calm and optimistic
+  variants: 3
+\`\`\`
+-->
 `;
 }
 

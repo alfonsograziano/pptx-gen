@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeFile } from "node:fs/promises";
+import { deflateSync } from "node:zlib";
 import type { ShotFn, ShotRequest } from "./html-shot.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -47,4 +48,44 @@ export function fakeShot(options: { fail?: boolean } = {}): FakeShot {
   shot.calls = 0;
   shot.requests = [];
   return shot;
+}
+
+/**
+ * A valid grey PNG of any size: real IHDR, CRCs and deflated pixel rows. For
+ * tests whose maths depends on a picture's proportions, and that LibreOffice
+ * should still be able to render.
+ */
+export function makePng(width: number, height: number, shade = 0x88): Buffer {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8; // bit depth
+  header[9] = 0; // greyscale
+  const row = Buffer.alloc(width + 1, shade);
+  row[0] = 0; // no filter
+  const pixels = deflateSync(Buffer.concat(Array.from({ length: height }, () => row)));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", header),
+    pngChunk("IDAT", pixels),
+    pngChunk("IEND", Buffer.alloc(0))
+  ]);
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(body));
+  return Buffer.concat([length, body, crc]);
+}
+
+function crc32(bytes: Buffer): number {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = crc & 1 ? (crc >>> 1) ^ 0xedb88320 : crc >>> 1;
+  }
+  return (crc ^ 0xffffffff) >>> 0;
 }

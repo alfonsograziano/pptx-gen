@@ -3,11 +3,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PptxPackage } from "./pptx-package.js";
 import { fitBox, type Box, type Figure, type FigureBox, type FigureFit, type FigureRenderer } from "./figure.js";
-import type { BuildWarning, SlideOverride, TemplateField, TextStyle } from "./types.js";
+import type { BuildWarning, ImageFit, ImageSource, SlideOverride, TemplateField, TextStyle } from "./types.js";
 import { richTextToPlain } from "./rich-text.js";
 import { asArray, buildXml, escapeXml, parseXml, unescapeXml, type XmlNode } from "./xml.js";
 import { C, FONTS, LAYOUT } from "./design.js";
 import type { AssetResolver } from "./assets.js";
+import { coverCrop, ImageResolver, type ResolvedPicture, type SlideImages } from "./images.js";
 
 const EMU_PER_IN = 914400;
 const SLIDE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
@@ -468,6 +469,12 @@ export type OverrideContext = {
   warnings: BuildWarning[];
   /** Shared across the build. Without it, figure overrides fall back. */
   figures?: FigureRenderer;
+  /**
+   * The build's picture resolver, bound to this slide's position in the deck
+   * (not its part number in the package). Without it, a throwaway one is used
+   * and nothing is recorded.
+   */
+  images?: SlideImages;
 };
 
 export async function applyOverrides(
@@ -478,6 +485,7 @@ export async function applyOverrides(
   ctx: OverrideContext
 ): Promise<void> {
   const { assets, warnings } = ctx;
+  const images = ctx.images ?? new ImageResolver({ projectDir: assets.projectDir, warnings }).forSlide(slideNumber);
   let slideXml = await pkg.text(`ppt/slides/slide${slideNumber}.xml`);
 
   for (const override of overrides) {
@@ -531,12 +539,16 @@ export async function applyOverrides(
         createPictureShape(override.id, relId, override.x, override.y, override.w, override.h)
       );
     } else if (override.op === "addImage") {
-      const sourcePath = assets.resolveProjectPath(override.path);
-      const relId = await embedImagePart(pkg, slideNumber, await readFile(sourcePath), extensionOf(sourcePath, "png"));
-      slideXml = insertShape(
-        slideXml,
-        createPictureShape(override.id, relId, override.x, override.y, override.w, override.h)
-      );
+      const box: Box = { x: override.x, y: override.y, w: override.w, h: override.h };
+      const picture = await images.resolve(override);
+      if (picture.status === "missing") {
+        // Nothing else occupies this spot, so say what belongs here.
+        slideXml = insertShape(slideXml, createPlaceholderShape(override.id, picture.caption, box));
+      } else {
+        const relId = await embedImagePart(pkg, slideNumber, picture.bytes, picture.extension);
+        const fit = images.fitFor(picture, override.fit ?? defaultFit(override));
+        slideXml = insertShape(slideXml, createFittedPicture(override.id, relId, box, fit, picture));
+      }
     } else if (override.op === "addFigure") {
       const box: Box = { x: override.x, y: override.y, w: override.w, h: override.h };
       const rendered = await renderFigure(ctx, override.figure, { w: box.w, h: box.h });
@@ -575,16 +587,26 @@ export async function applyOverrides(
         );
       }
     } else if (override.op === "replaceImage") {
-      const sourcePath = assets.resolveProjectPath(override.path);
-      const relId = await embedImagePart(pkg, slideNumber, await readFile(sourcePath), extensionOf(sourcePath, "png"));
-      slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) => {
-        if (!/<a:blip\b[^>]*\br:embed="/.test(shapeXml)) {
-          throw new Error(
-            `replaceImage target '${override.target}' on slide ${slideNumber} is not an image (no <a:blip>).`
-          );
-        }
-        return shapeXml.replace(/(<a:blip\b[^>]*\br:embed=")[^"]*(")/, `$1${relId}$2`);
-      });
+      const picture = await images.resolve(override);
+      if (picture.status === "missing") {
+        slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) =>
+          pictureToPlaceholder(shapeXml, picture.caption, override.target, slideNumber, warnings)
+        );
+      } else {
+        const relId = await embedImagePart(pkg, slideNumber, picture.bytes, picture.extension);
+        const requested = override.fit ?? (override.image === undefined ? undefined : "cover");
+        const fit = requested && images.fitFor(picture, requested);
+        slideXml = replaceTargetShape(slideXml, override.target, fields, warnings, slideNumber, (shapeXml) => {
+          if (!/<a:blip\b[^>]*\br:embed="/.test(shapeXml)) {
+            throw new Error(
+              `replaceImage target '${override.target}' on slide ${slideNumber} is not an image (no <a:blip>).`
+            );
+          }
+          // No fit asked for on a path: the straight swap it has always been.
+          if (!fit) return shapeXml.replace(/(<a:blip\b[^>]*\br:embed=")[^"]*(")/, `$1${relId}$2`);
+          return refitPicture(shapeXml, relId, fit, picture, override.target, slideNumber);
+        });
+      }
     }
   }
 
@@ -949,10 +971,11 @@ function swapPicture(
   aspect: number,
   fit: FigureFit,
   target: string,
-  slideNumber: number
+  slideNumber: number,
+  op = "replaceFigure"
 ): string {
   if (!/<a:blip\b[^>]*\br:embed="/.test(shapeXml)) {
-    throw new Error(`replaceFigure target '${target}' on slide ${slideNumber} is not an image (no <a:blip>).`);
+    throw new Error(`${op} target '${target}' on slide ${slideNumber} is not an image (no <a:blip>).`);
   }
   const next = shapeXml
     .replace(/(<a:blip\b[^>]*\br:embed=")[^"]*(")/, `$1${relId}$2`)
@@ -979,8 +1002,12 @@ function swapPicture(
  * and styled to match `addImagePlaceholder` so a deck that mixes cloned and
  * custom slides does not show two different grey boxes.
  */
-function createPlaceholderShape(id: string, caption: string, box: Box): string {
-  const shapeId = nextRuntimeShapeId();
+function createPlaceholderShape(
+  id: string,
+  caption: string,
+  box: Box,
+  shapeId: number | string = nextRuntimeShapeId()
+): string {
   return (
     `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="${escapeXml(id)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
     `<p:spPr><a:xfrm><a:off x="${inToEmu(box.x)}" y="${inToEmu(box.y)}"/><a:ext cx="${inToEmu(box.w)}" cy="${inToEmu(box.h)}"/></a:xfrm>` +
@@ -1008,9 +1035,106 @@ function createTextShape(
   return `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="${escapeXml(id)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${inToEmu(x)}" y="${inToEmu(y)}"/><a:ext cx="${inToEmu(w)}" cy="${inToEmu(h)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square"><a:noAutofit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="l"><a:buNone/></a:pPr><a:r><a:rPr lang="en" sz="${Math.round((style.fontSize ?? 10) * 100)}"${style.bold ? ` b="1"` : ""}${style.italic ? ` i="1"` : ""}><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${escapeXml(style.fontFace ?? FONTS.sans)}"/></a:rPr><a:t>${escapeXml(text)}</a:t></a:r><a:endParaRPr/></a:p></p:txBody></p:sp>`;
 }
 
-function createPictureShape(id: string, relId: string, x: number, y: number, w: number, h: number): string {
+function createPictureShape(
+  id: string,
+  relId: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  crop?: SrcRect
+): string {
   const shapeId = nextRuntimeShapeId();
-  return `<p:pic><p:nvPicPr><p:cNvPr id="${shapeId}" name="${escapeXml(id)}"/><p:cNvPicPr preferRelativeResize="0"/><p:nvPr/></p:nvPicPr><p:blipFill rotWithShape="1"><a:blip r:embed="${relId}"/><a:stretch/></p:blipFill><p:spPr><a:xfrm><a:off x="${inToEmu(x)}" y="${inToEmu(y)}"/><a:ext cx="${inToEmu(w)}" cy="${inToEmu(h)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${shapeId}" name="${escapeXml(id)}"/><p:cNvPicPr preferRelativeResize="0"/><p:nvPr/></p:nvPicPr><p:blipFill rotWithShape="1"><a:blip r:embed="${relId}"/>${crop ? srcRectXml(crop) : ""}<a:stretch/></p:blipFill><p:spPr><a:xfrm><a:off x="${inToEmu(x)}" y="${inToEmu(y)}"/><a:ext cx="${inToEmu(w)}" cy="${inToEmu(h)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
+}
+
+type SrcRect = { l: number; t: number; r: number; b: number };
+type FoundPicture = Extract<ResolvedPicture, { status: "found" }>;
+
+function srcRectXml(crop: SrcRect): string {
+  return `<a:srcRect l="${crop.l}" t="${crop.t}" r="${crop.r}" b="${crop.b}"/>`;
+}
+
+/** An `image` fills its box by default; a `path` keeps stretching into it, as it always has. */
+function defaultFit(source: ImageSource): ImageFit {
+  return source.image === undefined ? "stretch" : "cover";
+}
+
+/** A new picture placed in `box` with the given fit. */
+function createFittedPicture(id: string, relId: string, box: Box, fit: ImageFit, picture: FoundPicture): string {
+  if (fit === "contain" && picture.size) {
+    const placed = fitBox(box, picture.size.pxWidth, picture.size.pxHeight, "contain");
+    return createPictureShape(id, relId, placed.x, placed.y, placed.w, placed.h);
+  }
+  const crop = fit === "cover" && picture.size ? coverCrop(box, picture.size) : undefined;
+  return createPictureShape(id, relId, box.x, box.y, box.w, box.h, crop);
+}
+
+/**
+ * Point a template picture at new bytes, fitted to the picture's own box.
+ *
+ * `cover` keeps the box exactly where the template put it and crops the new
+ * image to fill it, so the slide's layout is untouched. `contain` re-inscribes
+ * the box around the image, as `replaceFigure` does.
+ */
+function refitPicture(
+  shapeXml: string,
+  relId: string,
+  fit: ImageFit,
+  picture: FoundPicture,
+  target: string,
+  slideNumber: number
+): string {
+  if (fit === "contain" && picture.size) {
+    const aspect = picture.size.pxWidth / picture.size.pxHeight;
+    return swapPicture(shapeXml, relId, aspect, "contain", target, slideNumber, "replaceImage");
+  }
+  const swapped = swapPicture(shapeXml, relId, 1, "stretch", target, slideNumber, "replaceImage");
+  if (fit !== "cover" || !picture.size) return swapped;
+  const geometry = getGeometry(swapped);
+  if (!geometry.w || !geometry.h) return swapped;
+  const crop = coverCrop({ w: geometry.w, h: geometry.h }, picture.size);
+  if (!crop) return swapped;
+  return swapped.replace(/<a:blip\b[^>]*\/>|<a:blip\b[^>]*>[\s\S]*?<\/a:blip>/, (blip) => `${blip}${srcRectXml(crop)}`);
+}
+
+/**
+ * Stand a captioned placeholder in for a template picture whose image has not
+ * been generated yet.
+ *
+ * The placeholder keeps the picture's shape id and name, so later overrides and
+ * field lookups aimed at it still land. When the picture's box cannot be read —
+ * a layout placeholder that inherits its position — the template's own picture
+ * is kept instead, with a warning, rather than guessing where the box is.
+ */
+function pictureToPlaceholder(
+  shapeXml: string,
+  caption: string,
+  target: string,
+  slideNumber: number,
+  warnings: BuildWarning[]
+): string {
+  const off = shapeXml.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>/);
+  const ext = shapeXml.match(/<a:ext cx="(\d+)" cy="(\d+)"\/>/);
+  const cNvPr = shapeXml.match(/<p:cNvPr\b[^>]*>/)?.[0] ?? "";
+  const shapeId = cNvPr.match(/\bid="([^"]+)"/)?.[1];
+  const name = cNvPr.match(/\bname="([^"]*)"/)?.[1];
+  if (!off || !ext || !shapeId) {
+    warnings.push({
+      code: "image-placeholder-skipped",
+      message: `The image for '${target}' is missing, but that picture's box could not be read, so it keeps the template's original image.`,
+      slide: slideNumber,
+      target
+    });
+    return shapeXml;
+  }
+  const box = {
+    x: emuToIn(Number(off[1])),
+    y: emuToIn(Number(off[2])),
+    w: emuToIn(Number(ext[1])),
+    h: emuToIn(Number(ext[2]))
+  };
+  return createPlaceholderShape(unescapeXml(name ?? target), caption, box, shapeId);
 }
 
 async function addPresentationSlide(pkg: PptxPackage, slideNumber: number): Promise<void> {
