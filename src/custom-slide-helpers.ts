@@ -242,11 +242,16 @@ export function createCustomSlideHelpers(options: {
         endArrowType?: ArrowType;
       }
     ) {
+      // pptxgenjs writes a negative width or height through as-is instead of
+      // flipping the shape, so an arrow pointing left or up came out invalid or
+      // backwards. Draw the box from its top-left corner and flip it instead.
       slide.addShape(shapeType.line, {
-        x: opts.from.x,
-        y: opts.from.y,
-        w: opts.to.x - opts.from.x,
-        h: opts.to.y - opts.from.y,
+        x: Math.min(opts.from.x, opts.to.x),
+        y: Math.min(opts.from.y, opts.to.y),
+        w: Math.abs(opts.to.x - opts.from.x),
+        h: Math.abs(opts.to.y - opts.from.y),
+        flipH: opts.to.x < opts.from.x,
+        flipV: opts.to.y < opts.from.y,
         line: {
           color: stripHash(opts.color ?? C.muted),
           width: opts.width ?? 1.2,
