@@ -36,6 +36,7 @@ type Slide = {
   ) => unknown;
   addImage: (options: Record<string, unknown>) => unknown;
   addShape: (shapeName: string, options?: Record<string, unknown>) => unknown;
+  addNotes: (notes: string) => unknown;
 };
 
 export type CustomSlideContext = {
@@ -66,6 +67,11 @@ export type CustomSlideOptions = {
    * different layout, not one layout branching on its own variant index.
    */
   group?: string;
+  /**
+   * Speaker notes, one paragraph per line. Replaces anything `draw` passed to
+   * pptxgenjs's own `slide.addNotes`, which also survives into the deck.
+   */
+  notes?: string;
   draw: (context: CustomSlideContext) => void | Promise<void>;
 };
 
@@ -74,12 +80,14 @@ export class CustomSlide {
   readonly background?: CustomSlideOptions["background"];
   readonly requiredFonts: string[];
   readonly group?: string;
+  readonly notes?: string;
   private readonly drawSlide: CustomSlideOptions["draw"];
 
   constructor(options: CustomSlideOptions) {
     this.name = options.name;
     this.background = options.background;
     this.group = options.group;
+    this.notes = options.notes;
     this.requiredFonts = options.requiredFonts ?? [FONTS.sans];
     this.drawSlide = options.draw;
   }
