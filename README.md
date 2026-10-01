@@ -276,6 +276,18 @@ stays editable and recolorable in PowerPoint and Google Slides.
 [`custom-template-instructions.md`](custom-template-instructions.md) has the full
 guide and ten worked layouts.
 
+### Speaker notes
+
+Both kinds of slide take `notes`, one paragraph per line:
+
+```ts
+deck.addSlideFromTemplate({ templateName: "title-cover", notes: "Open with the problem.\nKeep it short." });
+deck.addCustomSlide(new CustomSlide({ name: "callout", notes: "Pause here.", draw({ slide }) { /* … */ } }));
+```
+
+Notes a custom slide adds itself with pptxgenjs's `slide.addNotes(...)` reach the
+deck too.
+
 ### Variants: several takes on the same slide
 
 Ask for options and you get them side by side. Tag two or more slides with the

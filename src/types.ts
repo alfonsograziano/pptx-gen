@@ -91,6 +91,8 @@ export type AddSlideOptions = {
    * reviewer can pick one. Variants of a group must be added consecutively.
    */
   group?: string;
+  /** Speaker notes, one paragraph per line. */
+  notes?: string;
 };
 
 export type TemplateDeckSlide = {

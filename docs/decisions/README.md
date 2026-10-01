@@ -13,6 +13,7 @@ One file per decision that would be expensive to reverse. They exist so that a c
 | [0007](0007-any-is-confined-to-the-xml-layer.md) | `any` is confined to the XML layer |
 | [0008](0008-template-library-overrides-templates-only.md) | `templateLibrary` overrides the template root and nothing else |
 | [0009](0009-pptxgenjs-is-loaded-through-require.md) | pptxgenjs is loaded through `require`, lazily |
+| [0010](0010-a-slide-keeps-its-own-layout.md) | A cloned slide keeps its own layout, matched by content |
 
 ## Writing one
 

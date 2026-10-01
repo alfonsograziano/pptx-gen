@@ -21,6 +21,7 @@ import {
   getSlideEntries,
   keepOnlySlides,
   mergeEmbeddedFonts,
+  setSlideNotes,
   validateFonts,
   validatePackage
 } from "./ooxml.js";
@@ -149,10 +150,10 @@ export class Presentation {
     const customSlidesUsed: string[] = [];
     const requiredFonts = new Set<string>();
 
-    // Each template package is a single-slide slice that shares an identical
-    // support chain (layouts, masters, themes, fonts) with the base package.
-    // We merge every requested slide into the base package as a new slide, then
-    // trim the base down to only the slides we built.
+    // Each template package is a single-slide slice. We merge every requested
+    // slide into the base package as a new slide, then trim the base down to
+    // only the slides we built. A slice from another source deck brings its own
+    // layout, master and theme along (decision 0010), and its fonts below.
     for (const [index, requestedSlide] of this.slides.entries()) {
       const position = `${index + 1}/${this.slides.length}`;
 
@@ -178,8 +179,16 @@ export class Presentation {
               throw new Error(`Custom slide '${requestedSlide.slide.name}' produced no slides.`);
             }
 
-            const clonedSlideNumber = await appendSlideFromPackage(pkg, srcPkg, srcEntries[0].slideNumber, warnings);
+            // A custom slide has always sat on the base deck's first layout, so
+            // it shares the deck's master and theme. Importing pptxgenjs's own
+            // blank master would change how every existing custom slide looks.
+            const clonedSlideNumber = await appendSlideFromPackage(pkg, srcPkg, srcEntries[0].slideNumber, warnings, {
+              importLayout: false
+            });
             await convertCustomSlidePageNumber(pkg, clonedSlideNumber);
+            if (requestedSlide.slide.notes) {
+              await setSlideNotes(pkg, clonedSlideNumber, requestedSlide.slide.notes, warnings);
+            }
             clonedSlides.push(clonedSlideNumber);
             customSlidesUsed.push(requestedSlide.slide.name);
             warnings.push({
@@ -241,6 +250,9 @@ export class Presentation {
               figures
             }
           );
+          if (requestedSlide.options.notes) {
+            await setSlideNotes(pkg, clonedSlideNumber, requestedSlide.options.notes, warnings);
+          }
         }
       );
     }
@@ -384,8 +396,10 @@ export class Presentation {
       // pptxgenjs writes the file directly, so the page-number text boxes become
       // live fields in a second pass over the saved package.
       const pkg = await PptxPackage.load(output);
-      for (const entry of await getSlideEntries(pkg)) {
+      for (const [index, entry] of (await getSlideEntries(pkg)).entries()) {
         await convertCustomSlidePageNumber(pkg, entry.slideNumber);
+        const notes = customSlides[index].notes;
+        if (notes) await setSlideNotes(pkg, entry.slideNumber, notes, warnings);
       }
       await applySlideNumbering(pkg, warnings);
       await pkg.save(output);

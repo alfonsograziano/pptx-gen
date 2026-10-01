@@ -13,6 +13,14 @@ const EMU_PER_IN = 914400;
 const SLIDE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
 const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
 const FONT_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/font";
+const SLIDE_LAYOUT_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout";
+const SLIDE_MASTER_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster";
+const NOTES_SLIDE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
+const NOTES_MASTER_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster";
+const RELS_NS = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+/** A master's list of its layouts, in any of the forms it can take. */
+const SLD_LAYOUT_ID_LST = /<p:sldLayoutIdLst\/>|<p:sldLayoutIdLst>[\s\S]*?<\/p:sldLayoutIdLst>/;
 
 /**
  * Shape name the custom-slide footer helper stamps on its page-number text box,
@@ -126,49 +134,46 @@ export async function sliceToSingleSlide(pkg: PptxPackage, ordinalSlideNumber: n
  * into `targetPkg` as a brand new slide, wiring it into the presentation and
  * content types. Returns the new slide number in the target package.
  *
- * Slide layouts, masters, themes, and fonts are assumed to already exist in the
- * target (true for slices from the same source deck), so only the slide part,
- * its rels, and referenced media are copied.
+ * The slide's layout is matched by content, and copied in with its master and
+ * theme when the target has no equal (see `importSlideLayout`). `importLayout:
+ * false` skips that and keeps whatever the target has at the same path. Fonts
+ * are merged separately, by `mergeEmbeddedFonts`. Speaker notes come across as
+ * a notes slide of their own when the source slide has any.
  */
 export async function appendSlideFromPackage(
   targetPkg: PptxPackage,
   srcPkg: PptxPackage,
   srcSlideNumber: number,
-  warnings: BuildWarning[] = []
+  warnings: BuildWarning[] = [],
+  options: { importLayout?: boolean } = {}
 ): Promise<number> {
+  const importLayout = options.importLayout ?? true;
   const newSlideNumber = nextNumber(targetPkg.files("ppt/slides/"), /slide(\d+)\.xml$/);
   targetPkg.setBytes(
     `ppt/slides/slide${newSlideNumber}.xml`,
     await srcPkg.bytes(`ppt/slides/slide${srcSlideNumber}.xml`)
   );
 
+  let srcNotesPath: string | undefined;
   const srcRelsPath = `ppt/slides/_rels/slide${srcSlideNumber}.xml.rels`;
   if (srcPkg.has(srcRelsPath)) {
     const rels = parseXml<XmlNode>(await srcPkg.text(srcRelsPath));
+    // The notes slide is a part of its own, copied after the slide is wired in.
+    const notesRel = asArray(rels.Relationships?.Relationship).find((rel: XmlNode) => relKind(rel) === "notesSlide");
+    if (notesRel) srcNotesPath = resolveTarget(`ppt/slides/slide${srcSlideNumber}.xml`, String(notesRel["@_Target"]));
     rels.Relationships.Relationship = asArray(rels.Relationships?.Relationship).filter(
-      (rel: XmlNode) => !String(rel["@_Type"]).endsWith("/notesSlide")
+      (rel: XmlNode) => relKind(rel) !== "notesSlide"
     );
     for (const rel of asArray(rels.Relationships?.Relationship)) {
       if (String(rel["@_TargetMode"]) === "External") continue;
       const target = String(rel["@_Target"] ?? "");
       const resolved = path.posix.normalize(path.posix.join("ppt/slides", target));
-      if (resolved.includes("/media/") && srcPkg.has(resolved)) {
-        // Every source package numbers its own media from `image1`, so two
-        // independently rendered slides routinely both carry `ppt/media/image1.png`
-        // with DIFFERENT bytes. Skipping the copy because the name is taken would
-        // silently point this slide at the other slide's picture, so a clashing
-        // name gets a fresh one and the relationship is repointed at it.
-        const bytes = await srcPkg.bytes(resolved);
-        let mediaPath = resolved;
-        if (targetPkg.has(resolved) && !bytes.equals(await targetPkg.bytes(resolved))) {
-          const ext = path.posix.extname(resolved);
-          const next = nextNumber(targetPkg.files("ppt/media/"), /image(\d+)\./);
-          mediaPath = `ppt/media/image${next}${ext}`;
-          rel["@_Target"] = path.posix.relative("ppt/slides", mediaPath);
-        }
-        if (!targetPkg.has(mediaPath)) targetPkg.setBytes(mediaPath, bytes);
-        const ext = path.posix.extname(mediaPath).slice(1).toLowerCase();
-        if (ext) await addDefaultContentType(targetPkg, ext, mediaContentType(ext));
+      if (importLayout && relKind(rel) === "slideLayout" && srcPkg !== targetPkg && srcPkg.has(resolved)) {
+        const layoutPath = await importSlideLayout(targetPkg, srcPkg, resolved);
+        if (layoutPath !== resolved) rel["@_Target"] = path.posix.relative("ppt/slides", layoutPath);
+      } else if (resolved.includes("/media/") && srcPkg.has(resolved)) {
+        const mediaPath = await copyMediaPart(targetPkg, srcPkg, resolved);
+        if (mediaPath !== resolved) rel["@_Target"] = path.posix.relative("ppt/slides", mediaPath);
       } else if (targetPkg.has(resolved)) {
       } else {
         warnings.push({
@@ -184,7 +189,391 @@ export async function appendSlideFromPackage(
 
   await addPresentationSlide(targetPkg, newSlideNumber);
   await addSlideContentType(targetPkg, newSlideNumber);
+
+  // pptxgenjs writes a notes slide for every slide, empty unless the slide set
+  // notes, so only one with something in its body is worth carrying across.
+  if (srcNotesPath && srcPkg.has(srcNotesPath)) {
+    const notesXml = await srcPkg.text(srcNotesPath);
+    if (notesBodyText(notesXml).trim()) await attachNotesSlide(targetPkg, newSlideNumber, notesXml, warnings);
+  }
   return newSlideNumber;
+}
+
+/**
+ * Give a slide speaker notes, one paragraph per line of `text`, replacing any
+ * it already has.
+ */
+export async function setSlideNotes(
+  pkg: PptxPackage,
+  slideNumber: number,
+  text: string,
+  warnings: BuildWarning[] = []
+): Promise<void> {
+  const paragraphs = text
+    .split(/\r?\n/)
+    .map((line) =>
+      line
+        ? `<a:p><a:r><a:rPr lang="en-US" dirty="0"/><a:t>${escapeXml(line)}</a:t></a:r></a:p>`
+        : `<a:p><a:endParaRPr lang="en-US" dirty="0"/></a:p>`
+    )
+    .join("");
+  // The notes master supplies the geometry, so the placeholders need none.
+  const notesXml = withXmlHeader(
+    `<p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/><p:sp><p:nvSpPr><p:cNvPr id="2" name="Slide Image Placeholder 1"/><p:cNvSpPr><a:spLocks noGrp="1" noRot="1" noChangeAspect="1"/></p:cNvSpPr><p:nvPr><p:ph type="sldImg"/></p:nvPr></p:nvSpPr><p:spPr/></p:sp><p:sp><p:nvSpPr><p:cNvPr id="3" name="Notes Placeholder 2"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>${paragraphs}</p:txBody></p:sp></p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>`
+  );
+  await attachNotesSlide(pkg, slideNumber, notesXml, warnings);
+}
+
+/** The text in a notes slide's body placeholder, which is where the notes are. */
+function notesBodyText(notesXml: string): string {
+  return extractShapeBlocks(notesXml)
+    .filter((shapeXml) => /<p:ph\b[^>]*\btype="body"/.test(shapeXml))
+    .map(getShapeText)
+    .join("\n");
+}
+
+/**
+ * Add `notesXml` to the package as the notes slide of `slideNumber`, tied to the
+ * package's own notes master. A notes slide carries no pictures of its own in
+ * anything this engine writes or copies, so its relationships are rebuilt
+ * rather than carried over.
+ */
+async function attachNotesSlide(
+  pkg: PptxPackage,
+  slideNumber: number,
+  notesXml: string,
+  warnings: BuildWarning[]
+): Promise<void> {
+  const presentationRels = parseXml<XmlNode>(await pkg.text("ppt/_rels/presentation.xml.rels"));
+  const masterRel = asArray(presentationRels.Relationships?.Relationship).find(
+    (rel: XmlNode) => relKind(rel) === "notesMaster"
+  );
+  if (!masterRel) {
+    warnings.push({
+      code: "notes-dropped",
+      message: `Slide ${slideNumber} has speaker notes, but the deck it is built on has no notes master, so they were left out. Start the deck with a template whose source deck had notes.`,
+      slide: slideNumber
+    });
+    return;
+  }
+  const notesMasterPath = resolveTarget("ppt/presentation.xml", String(masterRel["@_Target"]));
+  const slidePath = `ppt/slides/slide${slideNumber}.xml`;
+
+  // One notes slide per slide. pptxgenjs writes an empty one for every slide,
+  // so an earlier one is removed outright rather than left behind unlinked.
+  const slideRelsPath = relsPathOf(slidePath);
+  if (pkg.has(slideRelsPath)) {
+    const rels = parseXml<XmlNode>(await pkg.text(slideRelsPath));
+    const relationships = asArray(rels.Relationships?.Relationship);
+    const earlier = relationships.filter((rel: XmlNode) => relKind(rel) === "notesSlide");
+    for (const rel of earlier) {
+      const earlierPath = resolveTarget(slidePath, String(rel["@_Target"]));
+      pkg.remove(earlierPath);
+      pkg.remove(relsPathOf(earlierPath));
+    }
+    if (earlier.length > 0) {
+      rels.Relationships.Relationship = relationships.filter((rel: XmlNode) => relKind(rel) !== "notesSlide");
+      pkg.setText(slideRelsPath, withXmlHeader(buildXml(rels)));
+      await pruneContentTypeOverrides(pkg);
+    }
+  }
+
+  const notesPath = `ppt/notesSlides/notesSlide${nextNumber(pkg.files("ppt/notesSlides/"), /notesSlide(\d+)\.xml$/)}.xml`;
+  pkg.setText(notesPath, notesXml);
+  pkg.setText(
+    relsPathOf(notesPath),
+    withXmlHeader(
+      buildXml({
+        Relationships: {
+          "@_xmlns": RELS_NS,
+          Relationship: [
+            {
+              "@_Id": "rId1",
+              "@_Type": NOTES_MASTER_REL_TYPE,
+              "@_Target": path.posix.relative("ppt/notesSlides", notesMasterPath)
+            },
+            { "@_Id": "rId2", "@_Type": SLIDE_REL_TYPE, "@_Target": path.posix.relative("ppt/notesSlides", slidePath) }
+          ]
+        }
+      })
+    )
+  );
+
+  await addPartRelationship(pkg, slidePath, NOTES_SLIDE_REL_TYPE, path.posix.relative("ppt/slides", notesPath));
+  await addOverrideContentType(
+    pkg,
+    notesPath,
+    "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml"
+  );
+}
+
+/**
+ * Make sure `targetPkg` holds the slide layout at `srcLayoutPath` in `srcPkg`,
+ * with its master and theme, and return where it lives in the target.
+ *
+ * A slide takes its background, its brand marks and its theme fonts from its
+ * layout, master and theme, so copying the slide's XML alone is only enough
+ * when the target already has the same layout. Slices of one source deck do,
+ * path for path. Templates ingested from different decks do not: the same path
+ * can name a different layout or none at all, and the slide then quietly
+ * renders on the base deck's layout instead of its own. So layouts are matched
+ * on content, and one the target has no equal of is copied in, along with its
+ * master and theme when the target has no equal of those either.
+ */
+async function importSlideLayout(targetPkg: PptxPackage, srcPkg: PptxPackage, srcLayoutPath: string): Promise<string> {
+  const srcPrints = new Map<string, string>();
+  const targetPrints = new Map<string, string>();
+  const existing = await findEquivalentPart(targetPkg, srcPkg, srcLayoutPath, "slideLayout", srcPrints, targetPrints);
+  if (existing) return existing;
+
+  let masterPath: string | undefined;
+  for (const rel of await readRelationships(srcPkg, srcLayoutPath)) {
+    if (relKind(rel) !== "slideMaster") continue;
+    const srcMasterPath = resolveTarget(srcLayoutPath, String(rel["@_Target"]));
+    masterPath =
+      (await findEquivalentPart(targetPkg, srcPkg, srcMasterPath, "slideMaster", srcPrints, targetPrints)) ??
+      (await importSlideMaster(targetPkg, srcPkg, srcMasterPath));
+  }
+
+  const layoutPath = nextPartPath(targetPkg, "slideLayout");
+  await copySupportPart(targetPkg, srcPkg, srcLayoutPath, layoutPath, await srcPkg.text(srcLayoutPath), (kind) =>
+    kind === "slideMaster" ? masterPath : undefined
+  );
+  if (masterPath) await addLayoutToMaster(targetPkg, masterPath, layoutPath);
+  return layoutPath;
+}
+
+/**
+ * Copy a slide master and its theme into the target as a new master with no
+ * layouts yet. Layouts join it one at a time as slides need them, which keeps a
+ * 200-layout source deck from dragging every one of them into the output.
+ */
+async function importSlideMaster(targetPkg: PptxPackage, srcPkg: PptxPackage, srcMasterPath: string): Promise<string> {
+  const masterPath = nextPartPath(targetPkg, "slideMaster");
+  const masterXml = (await srcPkg.text(srcMasterPath)).replace(SLD_LAYOUT_ID_LST, "<p:sldLayoutIdLst/>");
+
+  let themePath: string | undefined;
+  for (const rel of await readRelationships(srcPkg, srcMasterPath)) {
+    if (relKind(rel) !== "theme") continue;
+    // A theme belongs to exactly one master, so it is always copied, never shared.
+    const srcThemePath = resolveTarget(srcMasterPath, String(rel["@_Target"]));
+    themePath = nextPartPath(targetPkg, "theme");
+    await copySupportPart(targetPkg, srcPkg, srcThemePath, themePath, await srcPkg.text(srcThemePath), () => undefined);
+  }
+
+  await copySupportPart(targetPkg, srcPkg, srcMasterPath, masterPath, masterXml, (kind) =>
+    kind === "theme" ? themePath : kind === "slideLayout" ? null : undefined
+  );
+
+  const id = await nextMasterOrLayoutId(targetPkg);
+  const relId = await addPresentationRelationship(
+    targetPkg,
+    SLIDE_MASTER_REL_TYPE,
+    path.posix.relative("ppt", masterPath)
+  );
+  const presentation = parseXml<XmlNode>(await targetPkg.text("ppt/presentation.xml"));
+  const root = presentation["p:presentation"];
+  root["p:sldMasterIdLst"] ??= {};
+  const list = root["p:sldMasterIdLst"];
+  list["p:sldMasterId"] = [...asArray(list["p:sldMasterId"]), { "@_id": id, "@_r:id": relId }];
+  targetPkg.setText("ppt/presentation.xml", withXmlHeader(buildXml(presentation)));
+  return masterPath;
+}
+
+/** List `layoutPath` among its master's layouts, as PowerPoint requires. */
+async function addLayoutToMaster(pkg: PptxPackage, masterPath: string, layoutPath: string): Promise<void> {
+  const relId = await addPartRelationship(
+    pkg,
+    masterPath,
+    SLIDE_LAYOUT_REL_TYPE,
+    path.posix.relative(path.posix.dirname(masterPath), layoutPath)
+  );
+  const entry = `<p:sldLayoutId id="${await nextMasterOrLayoutId(pkg)}" r:id="${relId}"/>`;
+  const masterXml = await pkg.text(masterPath);
+  let nextXml: string;
+  if (masterXml.includes("<p:sldLayoutIdLst/>")) {
+    nextXml = masterXml.replace("<p:sldLayoutIdLst/>", `<p:sldLayoutIdLst>${entry}</p:sldLayoutIdLst>`);
+  } else if (masterXml.includes("</p:sldLayoutIdLst>")) {
+    nextXml = masterXml.replace("</p:sldLayoutIdLst>", `${entry}</p:sldLayoutIdLst>`);
+  } else {
+    // The list is optional, and when present it comes straight after clrMap.
+    nextXml = masterXml.replace(
+      /<p:clrMap\b[^>]*\/>|<p:clrMap\b[\s\S]*?<\/p:clrMap>/,
+      (clrMap) => `${clrMap}<p:sldLayoutIdLst>${entry}</p:sldLayoutIdLst>`
+    );
+  }
+  pkg.setText(masterPath, nextXml);
+}
+
+/**
+ * Master and layout ids share one space: unique across the presentation and
+ * no lower than 2^31.
+ */
+async function nextMasterOrLayoutId(pkg: PptxPackage): Promise<number> {
+  let max = 2147483647;
+  const parts = ["ppt/presentation.xml", ...pkg.files("ppt/slideMasters/").filter((file) => file.endsWith(".xml"))];
+  for (const part of parts) {
+    for (const match of (await pkg.text(part)).matchAll(/<p:sld(?:Master|Layout)Id\b[^>]*?\bid="(\d+)"/g)) {
+      max = Math.max(max, Number(match[1]));
+    }
+  }
+  return max + 1;
+}
+
+/**
+ * Find a part in the target that renders the same as `srcPath` does in its own
+ * package: a layout or master whose XML, pictures, master and theme all match.
+ * The same path is tried first, because slices of one deck share their parts.
+ */
+async function findEquivalentPart(
+  targetPkg: PptxPackage,
+  srcPkg: PptxPackage,
+  srcPath: string,
+  kind: "slideLayout" | "slideMaster",
+  srcPrints: Map<string, string>,
+  targetPrints: Map<string, string>
+): Promise<string | undefined> {
+  const wanted = await partFingerprint(srcPkg, srcPath, srcPrints);
+  const pattern = new RegExp(`^ppt/${kind}s/${kind}\\d+\\.xml$`);
+  const candidates = [srcPath, ...targetPkg.files(`ppt/${kind}s/`).filter((file) => pattern.test(file))];
+  for (const candidate of candidates) {
+    if (targetPkg.has(candidate) && (await partFingerprint(targetPkg, candidate, targetPrints)) === wanted) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Hash what a layout, master or theme looks like: its XML plus, through its
+ * relationships, the bytes of its pictures and the fingerprints of its master
+ * and theme. A master's own list of layouts is left out, since which layouts a
+ * master offers does not change how any one of them renders — and an imported
+ * master carries only the layouts the deck uses.
+ */
+async function partFingerprint(pkg: PptxPackage, partPath: string, memo: Map<string, string>): Promise<string> {
+  const cached = memo.get(partPath);
+  if (cached) return cached;
+
+  const hash = createHash("sha1").update((await pkg.text(partPath)).replace(SLD_LAYOUT_ID_LST, ""));
+  const relationships = (await readRelationships(pkg, partPath)).sort((a: XmlNode, b: XmlNode) =>
+    String(a["@_Id"]).localeCompare(String(b["@_Id"]))
+  );
+  for (const rel of relationships) {
+    const kind = relKind(rel);
+    if (kind === "slideLayout") continue;
+    hash.update(`\n${rel["@_Id"]} ${kind} `);
+    const target = String(rel["@_Target"] ?? "");
+    if (String(rel["@_TargetMode"]) === "External") {
+      hash.update(target);
+      continue;
+    }
+    const resolved = resolveTarget(partPath, target);
+    if (!pkg.has(resolved)) hash.update(`missing ${resolved}`);
+    else if (kind === "slideMaster" || kind === "theme") hash.update(await partFingerprint(pkg, resolved, memo));
+    else hash.update(await pkg.bytes(resolved));
+  }
+
+  const print = hash.digest("hex");
+  memo.set(partPath, print);
+  return print;
+}
+
+/**
+ * Write `xml` at `targetPath` with the relationships `srcPath` has in its own
+ * package, plus its content type. `repoint` decides where a relationship of a
+ * given kind now points: a path, `null` to drop it, or `undefined` for the
+ * default — pictures are copied across, anything else keeps its path.
+ */
+async function copySupportPart(
+  targetPkg: PptxPackage,
+  srcPkg: PptxPackage,
+  srcPath: string,
+  targetPath: string,
+  xml: string,
+  repoint: (kind: string) => string | null | undefined
+): Promise<void> {
+  targetPkg.setText(targetPath, xml);
+
+  const relationships: XmlNode[] = [];
+  for (const rel of await readRelationships(srcPkg, srcPath)) {
+    if (String(rel["@_TargetMode"]) === "External") {
+      relationships.push(rel);
+      continue;
+    }
+    const resolved = resolveTarget(srcPath, String(rel["@_Target"] ?? ""));
+    let target = repoint(relKind(rel));
+    if (target === null) continue;
+    if (target === undefined) {
+      target =
+        resolved.includes("/media/") && srcPkg.has(resolved)
+          ? await copyMediaPart(targetPkg, srcPkg, resolved)
+          : resolved;
+    }
+    relationships.push({ ...rel, "@_Target": path.posix.relative(path.posix.dirname(targetPath), target) });
+  }
+  if (relationships.length > 0) {
+    targetPkg.setText(
+      relsPathOf(targetPath),
+      withXmlHeader(buildXml({ Relationships: { "@_xmlns": RELS_NS, Relationship: relationships } }))
+    );
+  }
+
+  const contentTypes = parseXml<XmlNode>(await srcPkg.text("[Content_Types].xml"));
+  const override = asArray(contentTypes.Types?.Override).find((item: XmlNode) => item["@_PartName"] === `/${srcPath}`);
+  if (override) await addOverrideContentType(targetPkg, targetPath, String(override["@_ContentType"]));
+}
+
+/**
+ * Copy a picture into the target and return where it landed.
+ *
+ * Every source package numbers its own media from `image1`, so two
+ * independently rendered slides routinely both carry `ppt/media/image1.png`
+ * with DIFFERENT bytes. Skipping the copy because the name is taken would
+ * silently point the slide at the other slide's picture, so a clashing name
+ * gets a fresh one and the caller repoints its relationship at it.
+ */
+async function copyMediaPart(targetPkg: PptxPackage, srcPkg: PptxPackage, srcPath: string): Promise<string> {
+  const bytes = await srcPkg.bytes(srcPath);
+  let mediaPath = srcPath;
+  if (targetPkg.has(srcPath) && !bytes.equals(await targetPkg.bytes(srcPath))) {
+    const next = nextNumber(targetPkg.files("ppt/media/"), /image(\d+)\./);
+    mediaPath = `ppt/media/image${next}${path.posix.extname(srcPath)}`;
+  }
+  if (!targetPkg.has(mediaPath)) targetPkg.setBytes(mediaPath, bytes);
+  const ext = path.posix.extname(mediaPath).slice(1).toLowerCase();
+  if (ext) await addDefaultContentType(targetPkg, ext, mediaContentType(ext));
+  return mediaPath;
+}
+
+/** The first free `ppt/<kind>s/<kind>N.xml`, e.g. `ppt/slideLayouts/slideLayout45.xml`. */
+function nextPartPath(pkg: PptxPackage, kind: "slideLayout" | "slideMaster" | "theme"): string {
+  const folder = kind === "theme" ? "theme" : `${kind}s`;
+  return `ppt/${folder}/${kind}${nextNumber(pkg.files(`ppt/${folder}/`), new RegExp(`${kind}(\\d+)\\.xml$`))}.xml`;
+}
+
+async function readRelationships(pkg: PptxPackage, partPath: string): Promise<XmlNode[]> {
+  const relsPath = relsPathOf(partPath);
+  if (!pkg.has(relsPath)) return [];
+  return asArray(parseXml<XmlNode>(await pkg.text(relsPath)).Relationships?.Relationship);
+}
+
+/**
+ * A relationship's kind: the last segment of its type, e.g. `slideLayout`. The
+ * same in transitional and strict packages, whose type URIs differ.
+ */
+function relKind(rel: XmlNode): string {
+  return String(rel["@_Type"] ?? "")
+    .split("/")
+    .pop() as string;
+}
+
+function relsPathOf(partPath: string): string {
+  return path.posix.join(path.posix.dirname(partPath), "_rels", `${path.posix.basename(partPath)}.rels`);
+}
+
+function resolveTarget(partPath: string, target: string): string {
+  return path.posix.normalize(path.posix.join(path.posix.dirname(partPath), target));
 }
 
 /**
@@ -1035,12 +1424,14 @@ async function addSlideRelationship(
   type: string,
   target: string
 ): Promise<string> {
-  const relPath = `ppt/slides/_rels/slide${slideNumber}.xml.rels`;
+  return addPartRelationship(pkg, `ppt/slides/slide${slideNumber}.xml`, type, target);
+}
+
+async function addPartRelationship(pkg: PptxPackage, partPath: string, type: string, target: string): Promise<string> {
+  const relPath = relsPathOf(partPath);
   const rels = pkg.has(relPath)
     ? parseXml<XmlNode>(await pkg.text(relPath))
-    : {
-        Relationships: { "@_xmlns": "http://schemas.openxmlformats.org/package/2006/relationships", Relationship: [] }
-      };
+    : { Relationships: { "@_xmlns": RELS_NS, Relationship: [] } };
   const relationships = asArray(rels.Relationships.Relationship);
   const relId = nextRelId(relationships);
   relationships.push({ "@_Id": relId, "@_Type": type, "@_Target": target });
@@ -1050,14 +1441,19 @@ async function addSlideRelationship(
 }
 
 async function addSlideContentType(pkg: PptxPackage, slideNumber: number): Promise<void> {
+  await addOverrideContentType(
+    pkg,
+    `ppt/slides/slide${slideNumber}.xml`,
+    "application/vnd.openxmlformats-officedocument.presentationml.slide+xml"
+  );
+}
+
+async function addOverrideContentType(pkg: PptxPackage, partPath: string, contentType: string): Promise<void> {
   const contentTypes = parseXml<XmlNode>(await pkg.text("[Content_Types].xml"));
   const overrides = asArray(contentTypes.Types.Override);
-  const partName = `/ppt/slides/slide${slideNumber}.xml`;
+  const partName = `/${partPath}`;
   if (!overrides.some((override: XmlNode) => override["@_PartName"] === partName)) {
-    overrides.push({
-      "@_PartName": partName,
-      "@_ContentType": "application/vnd.openxmlformats-officedocument.presentationml.slide+xml"
-    });
+    overrides.push({ "@_PartName": partName, "@_ContentType": contentType });
   }
   contentTypes.Types.Override = overrides;
   pkg.setText("[Content_Types].xml", withXmlHeader(buildXml(contentTypes)));
