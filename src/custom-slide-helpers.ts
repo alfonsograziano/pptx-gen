@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { C, FONTS, LAYOUT, LOGO_FILES } from "./design.js";
 import { fitBox, type Figure, type FigureFit, type FigureRenderer } from "./figure.js";
-import { PAGE_NUMBER_SHAPE_NAME } from "./ooxml.js";
+import { PAGE_NUMBER_SHAPE_NAME, VECTOR_ICON_SHAPE_NAME } from "./ooxml.js";
 import { parseSvg, svgToGeomPoints } from "./svg-path.js";
 import type { AssetResolver } from "./assets.js";
 
@@ -301,12 +301,16 @@ export function createCustomSlideHelpers(options: {
       const strokeWidth = opts.width ?? Math.max(0.5, (2 / parsed.vbH) * box.h * 72);
       // Omit `fill` entirely so PptxGenJS emits <a:noFill/>; passing {type:"none"}
       // is truthy and leaves the shape with a default (theme) fill instead.
+      // PptxGenJS drops `cap` on shapes, so the stroke would come out with flat
+      // ends and mitred corners. The name lets the save pass add round caps and
+      // joins to the XML (see roundVectorIconStrokes in ooxml.ts).
       slide.addShape("custGeom", {
+        objectName: VECTOR_ICON_SHAPE_NAME,
         x: box.x,
         y: box.y,
         w: box.w,
         h: box.h,
-        line: { color: stripHash(opts.color ?? C.ink), width: strokeWidth, cap: "round" },
+        line: { color: stripHash(opts.color ?? C.ink), width: strokeWidth },
         points
       });
     },

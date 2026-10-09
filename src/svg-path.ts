@@ -350,6 +350,34 @@ export function parseSvg(svg: string): ParsedSvg {
   return { vbW, vbH, subs };
 }
 
+/** Below this extent (in viewBox units) a subpath is a dot, not a line. */
+const DOT_EXTENT = 0.05;
+/** Radius of the ring that stands in for a dot. The stroke paints over it. */
+const DOT_RING_RADIUS = 0.1;
+
+/**
+ * Lucide draws a dot as a near-zero stroke ("M12 17h.01") and relies on the
+ * round line cap to paint it. A renderer that drops degenerate segments shows
+ * nothing, so swap the dot for a tiny closed ring: with a round join it paints
+ * as a filled disc just over one stroke-width wide, in every renderer.
+ */
+export function dotToRing(sub: SubPath): SubPath {
+  const xs = sub.pts.map((p) => p[0]);
+  const ys = sub.pts.map((p) => p[1]);
+  if (xs.length === 0) return sub;
+  const spanX = Math.max(...xs) - Math.min(...xs);
+  const spanY = Math.max(...ys) - Math.min(...ys);
+  if (spanX > DOT_EXTENT || spanY > DOT_EXTENT) return sub;
+  const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
+  const cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+  const pts: Pt[] = [];
+  for (let k = 0; k <= 8; k += 1) {
+    const a = (k / 8) * 2 * Math.PI;
+    pts.push([cx + DOT_RING_RADIUS * Math.cos(a), cy + DOT_RING_RADIUS * Math.sin(a)]);
+  }
+  return { pts, closed: true };
+}
+
 type GeomPoint = { x: number; y: number; moveTo?: boolean } | { close: true };
 
 /**
@@ -362,7 +390,7 @@ export function svgToGeomPoints(parsed: ParsedSvg, w: number, h: number): GeomPo
   const sy = h / parsed.vbH;
   const r = (n: number): number => Math.round(n * 10000) / 10000;
   const points: GeomPoint[] = [];
-  for (const sub of parsed.subs) {
+  for (const sub of parsed.subs.map(dotToRing)) {
     sub.pts.forEach((p, idx) => {
       const gx = r(p[0] * sx);
       const gy = r(p[1] * sy);
