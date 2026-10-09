@@ -27,6 +27,8 @@ const SLD_LAYOUT_ID_LST = /<p:sldLayoutIdLst\/>|<p:sldLayoutIdLst>[\s\S]*?<\/p:s
  * so the build can find it again and swap the literal for a live field.
  */
 export const PAGE_NUMBER_SHAPE_NAME = "pptx-gen-page-number";
+/** Name `addVectorIcon` gives its shapes, so the save pass can round their strokes. */
+export const VECTOR_ICON_SHAPE_NAME = "pptx-gen-vector-icon";
 
 const SLIDE_NUM_FIELD = /<a:fld\b[^>]*\btype="slidenum"/;
 
@@ -999,6 +1001,36 @@ export async function convertCustomSlidePageNumber(pkg: PptxPackage, slideNumber
     shapeXml.includes(`name="${PAGE_NUMBER_SHAPE_NAME}"`) ? runToSlideNumField(shapeXml) : shapeXml
   );
   if (nextXml !== slideXml) pkg.setText(slidePath, nextXml);
+}
+
+/**
+ * Give every vector icon on a slide round line caps and round joins, as the
+ * source SVG asks for (Lucide sets `stroke-linecap="round"`). PptxGenJS cannot
+ * write either, and without them a stroke ends flat, corners go sharp, and a
+ * dot (Lucide draws one as a 0.01-unit stroke, as in the "!" of triangle-alert)
+ * does not render at all.
+ */
+export async function roundVectorIconStrokes(pkg: PptxPackage, slideNumber: number): Promise<void> {
+  const slidePath = `ppt/slides/slide${slideNumber}.xml`;
+  const slideXml = await pkg.text(slidePath);
+  const nextXml = slideXml.replace(/<p:sp>[\s\S]*?<\/p:sp>/g, (shapeXml) =>
+    shapeXml.includes(`name="${VECTOR_ICON_SHAPE_NAME}"`) ? roundStroke(shapeXml) : shapeXml
+  );
+  if (nextXml !== slideXml) pkg.setText(slidePath, nextXml);
+}
+
+/** Set cap="rnd" on the shape outline and put `<a:round/>` where the schema wants the join. */
+export function roundStroke(shapeXml: string): string {
+  return shapeXml.replace(/<a:ln\b([^>]*)>([\s\S]*?)<\/a:ln>/, (match, attrs: string, inner: string) => {
+    if (attrs.endsWith("/")) return match;
+    const capAttrs = /\bcap="/.test(attrs) ? attrs.replace(/\bcap="[^"]*"/, 'cap="rnd"') : `${attrs} cap="rnd"`;
+    // CT_LineProperties order: fill, prstDash/custDash, join (round|bevel|miter), headEnd, tailEnd, extLst.
+    const withoutJoin = inner.replace(/<a:(?:round|bevel)\s*\/>|<a:miter\b[^>]*\/>/g, "");
+    const at = withoutJoin.search(/<a:(?:headEnd|tailEnd|extLst)\b/);
+    const joined =
+      at === -1 ? `${withoutJoin}<a:round/>` : `${withoutJoin.slice(0, at)}<a:round/>${withoutJoin.slice(at)}`;
+    return `<a:ln${capAttrs}>${joined}</a:ln>`;
+  });
 }
 
 /**

@@ -15,6 +15,7 @@ import {
   applyOverrides,
   applySlideNumbering,
   convertCustomSlidePageNumber,
+  roundVectorIconStrokes,
   convertTemplatePageNumber,
   fillSlideText,
   flattenSlideNumberFields,
@@ -186,6 +187,7 @@ export class Presentation {
               importLayout: false
             });
             await convertCustomSlidePageNumber(pkg, clonedSlideNumber);
+            await roundVectorIconStrokes(pkg, clonedSlideNumber);
             if (requestedSlide.slide.notes) {
               await setSlideNotes(pkg, clonedSlideNumber, requestedSlide.slide.notes, warnings);
             }
@@ -398,6 +400,7 @@ export class Presentation {
       const pkg = await PptxPackage.load(output);
       for (const [index, entry] of (await getSlideEntries(pkg)).entries()) {
         await convertCustomSlidePageNumber(pkg, entry.slideNumber);
+        await roundVectorIconStrokes(pkg, entry.slideNumber);
         const notes = customSlides[index].notes;
         if (notes) await setSlideNotes(pkg, entry.slideNumber, notes, warnings);
       }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { flattenPath, parseSvg, svgToGeomPoints } from "./svg-path.js";
+import { dotToRing, flattenPath, parseSvg, svgToGeomPoints } from "./svg-path.js";
 
 test("flattenPath turns a move+line into an absolute subpath", () => {
   const subs = flattenPath("M0 0 L10 0");
@@ -32,4 +32,25 @@ test("svgToGeomPoints scales into the target box and marks the first point moveT
   assert.equal(points.length, 2);
   assert.deepEqual(points[0], { x: 0, y: 0, moveTo: true });
   assert.deepEqual(points[1], { x: 1, y: 1 });
+});
+
+test("svgToGeomPoints turns a Lucide dot into a closed ring so it always renders", () => {
+  const parsed = parseSvg(`<svg viewBox="0 0 24 24"><path d="M12 9v4"/><path d="M12 17h.01"/></svg>`);
+  const points = svgToGeomPoints(parsed, 24, 24);
+  // The line keeps its two points; the dot becomes a 9-point ring plus a close.
+  assert.equal(points.length, 2 + 9 + 1);
+  assert.deepEqual(points.at(-1), { close: true });
+  const ring = points.slice(2, -1) as Array<{ x: number; y: number }>;
+  for (const p of ring) assert.ok(Math.abs(Math.hypot(p.x - 12.005, p.y - 17) - 0.1) < 0.001);
+});
+
+test("dotToRing leaves real strokes alone", () => {
+  const sub = {
+    pts: [
+      [12, 9],
+      [12, 13]
+    ] as Array<[number, number]>,
+    closed: false
+  };
+  assert.equal(dotToRing(sub), sub);
 });
