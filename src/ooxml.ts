@@ -1115,6 +1115,40 @@ export async function flattenSlideNumberFields(pkg: PptxPackage): Promise<void> 
 }
 
 /**
+ * Keep only the first `<a:pPr>` of every paragraph on every slide.
+ *
+ * pptxgenjs writes a paragraph-properties tag for each text run rather than
+ * each paragraph, so a paragraph that mixes runs (a bullet with a bold lead-in,
+ * say) gets a second `<a:pPr>` between its runs. That is invalid OOXML:
+ * LibreOffice drops the bullet and PowerPoint may offer to repair the file. The
+ * first tag is the one that sits where the schema expects it, so it wins. A
+ * `<a:pPr>` inside an `<a:fld>` belongs to the field, not the paragraph, and is
+ * left alone.
+ */
+export async function collapseParagraphProperties(pkg: PptxPackage): Promise<void> {
+  for (const entry of await getSlideEntries(pkg)) {
+    const slidePath = `ppt/slides/slide${entry.slideNumber}.xml`;
+    const slideXml = await pkg.text(slidePath);
+    const nextXml = slideXml.replace(PARAGRAPH, (paragraphXml) => {
+      let seen = false;
+      return paragraphXml.replace(PARAGRAPH_PROPS_OR_FIELD, (match) => {
+        if (match.startsWith("<a:fld")) return match;
+        if (seen) return "";
+        seen = true;
+        return match;
+      });
+    });
+    if (nextXml !== slideXml) pkg.setText(slidePath, nextXml);
+  }
+}
+
+// An open `<a:p>` (never `<a:pPr>`, never a self-closing `<a:p/>`) through its
+// close. Paragraphs do not nest, so the lazy match stops at the right tag.
+const PARAGRAPH = /<a:p(?:\s[^>]*)?(?<!\/)>[\s\S]*?<\/a:p>/g;
+const PARAGRAPH_PROPS_OR_FIELD =
+  /<a:fld\b[^>]*\/>|<a:fld\b[^>]*>[\s\S]*?<\/a:fld>|<a:pPr\b[^>]*\/>|<a:pPr\b[^>]*>[\s\S]*?<\/a:pPr>/g;
+
+/**
  * Decide whether a field is the slide's page number.
  *
  * A deck this tool generated is unambiguous: the shape already holds a

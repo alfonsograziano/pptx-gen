@@ -14,6 +14,7 @@ import {
   appendSlideFromPackage,
   applyOverrides,
   applySlideNumbering,
+  collapseParagraphProperties,
   convertCustomSlidePageNumber,
   roundVectorIconStrokes,
   convertTemplatePageNumber,
@@ -268,6 +269,7 @@ export class Presentation {
       await keepOnlySlides(pkg, clonedSlides);
       // Numbering can only be settled once the slides are in their final order.
       await applySlideNumbering(pkg, warnings);
+      await collapseParagraphProperties(pkg);
       await ensureDir(path.dirname(output));
       await pkg.save(output);
     });
@@ -405,6 +407,7 @@ export class Presentation {
         if (notes) await setSlideNotes(pkg, entry.slideNumber, notes, warnings);
       }
       await applySlideNumbering(pkg, warnings);
+      await collapseParagraphProperties(pkg);
       await pkg.save(output);
     });
     await progress.step("Validating PPTX package", () => validatePackage(output));
