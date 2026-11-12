@@ -6,7 +6,7 @@ pptx-gen is a TypeScript engine that compiles real, editable `.pptx` decks two w
 
 ```bash
 npm run check            # the whole gate: lint, typecheck, tests, dead-code scan (~40s)
-npm test                 # 114 tests, node --test over src/**/*.test.ts (~20s)
+npm test                 # 127 tests, node --test over src/**/*.test.ts (~20s)
 npm run build            # typecheck only: tsc --noEmit
 npm run lint             # biome check (lint + format check); npm run lint:fix writes the fixes
 npm run knip             # dead code: unused files, exports and dependencies

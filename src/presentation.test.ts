@@ -453,3 +453,56 @@ test("speaker notes survive an all-custom deck, one notes slide per slide", asyn
   const notesSlides = pkg.files("ppt/notesSlides/").filter((file) => /notesSlide\d+\.xml$/.test(file));
   assert.equal(notesSlides.length, entries.length);
 });
+
+test("a bullet that mixes bold and regular runs keeps one pPr and its bullet", async () => {
+  // pptxgenjs writes a pPr per run, so without the collapse pass the second
+  // run's pPr lands mid-paragraph. Both render paths save through it.
+  const bulletSlide = () =>
+    new CustomSlide({
+      name: "mixed-bullet",
+      draw: ({ slide }) => {
+        slide.addText(
+          [
+            { text: "Bold lead: ", options: { bold: true, bullet: true } },
+            { text: "then regular text.", options: { breakLine: true } },
+            { text: "Second ", options: { bold: true, bullet: true } },
+            { text: "item." }
+          ],
+          { x: 0.8, y: 1.5, w: 8.4, h: 2.0, fontSize: 20, paraSpaceAfter: 6 }
+        );
+      }
+    });
+
+  for (const withTemplate of [false, true]) {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "pptx-build-test-"));
+    try {
+      const deck = new Presentation({ title: "Test deck", templateLibrary: TEMPLATES, projectDir: dir });
+      if (withTemplate) deck.addSlideFromTemplate({ templateName: "title-cover", variables: {} });
+      deck.addCustomSlide(bulletSlide());
+      await deck.render({ output: "deck.pptx", progress: false });
+
+      const pkg = await PptxPackage.load(path.join(dir, "deck.pptx"));
+      const entries = await getSlideEntries(pkg);
+      const slideXml = await pkg.text(`ppt/slides/slide${entries[entries.length - 1].slideNumber}.xml`);
+      const paragraphs = slideXml.match(/<a:p>[\s\S]*?<\/a:p>/g) ?? [];
+      const bulleted = paragraphs.filter((p) => p.includes("Bold lead: ") || p.includes("Second "));
+
+      assert.equal(bulleted.length, 2, `withTemplate=${withTemplate}: expected two bullet paragraphs`);
+      for (const paragraph of paragraphs) {
+        const pPrCount = (paragraph.match(/<a:pPr\b/g) ?? []).length;
+        assert.ok(pPrCount <= 1, `withTemplate=${withTemplate}: paragraph has ${pPrCount} pPr: ${paragraph}`);
+      }
+      for (const paragraph of bulleted) {
+        assert.match(
+          paragraph,
+          /^<a:p><a:pPr\b[^>]*>(?:(?!<\/a:pPr>)[\s\S])*<a:buChar char="(?:•|&#x2022;)"/,
+          "the kept pPr leads and holds the bullet"
+        );
+        const runs = paragraph.includes("Bold lead: ") ? ["Bold lead: ", "then regular text."] : ["Second ", "item."];
+        for (const run of runs) assert.ok(paragraph.includes(`<a:t>${run}</a:t>`), `run kept in its paragraph: ${run}`);
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+});
